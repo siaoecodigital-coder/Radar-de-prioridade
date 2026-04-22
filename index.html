@@ -6,941 +6,182 @@
 <title>Radar de Prioridade</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --critico: #a32d2d;
-    --critico-bg: #fcebeb;
-    --critico-border: #e8c0c0;
-    --atencao: #854f0b;
-    --atencao-bg: #faeeda;
-    --atencao-border: #e8d4a8;
-    --ok: #3b6d11;
-    --ok-bg: #eaf3de;
-    --ok-border: #c8dfa8;
-    --bg: #f8f8f6;
-    --surface: #ffffff;
-    --border: rgba(0,0,0,0.12);
-    --text: #1a1a18;
-    --text-muted: #6b6b68;
-    --text-faint: #9b9b98;
-    --accent: #1a1a18;
-    --radius: 10px;
-    --font: 'DM Sans', system-ui, sans-serif;
-    --mono: 'DM Mono', monospace;
+    --critico: #a32d2d; --critico-bg: #fcebeb; --critico-border: #e8c0c0;
+    --atencao: #854f0b; --atencao-bg: #faeeda; --atencao-border: #e8d4a8;
+    --ok: #3b6d11; --ok-bg: #eaf3de; --ok-border: #c8dfa8;
+    --bg: #f8f8f6; --surface: #ffffff; --border: rgba(0,0,0,0.12);
+    --text: #1a1a18; --text-muted: #6b6b68; --text-faint: #9b9b98;
+    --radius: 10px; --font: 'DM Sans', system-ui, sans-serif; --mono: 'DM Mono', monospace;
   }
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.5; }
 
-  body {
-    font-family: var(--font);
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-
-  /* HEADER */
-  header {
-    background: var(--surface);
-    border-bottom: 0.5px solid var(--border);
-    padding: 0 24px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.3px;
-  }
-
-  .logo-icon {
-    width: 28px;
-    height: 28px;
-    background: var(--text);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .logo-icon svg { width: 16px; height: 16px; fill: white; }
-
+  header { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--text); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
   .header-right { display: flex; align-items: center; gap: 10px; }
+  .user-chip { display: none; align-items: center; gap: 8px; background: var(--bg); border: 0.5px solid var(--border); border-radius: 20px; padding: 4px 12px 4px 8px; font-size: 12px; }
+  .avatar { width: 22px; height: 22px; background: var(--text); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 600; }
+  .save-indicator { font-size: 11px; color: var(--ok); display: none; align-items: center; gap: 5px; }
+  .save-indicator.visible { display: flex; }
 
-  .user-info {
-    font-size: 13px;
-    color: var(--text-muted);
-    display: none;
-  }
-
-  /* BUTTONS */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    border-radius: 7px;
-    font-family: var(--font);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    transition: all 0.15s ease;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .btn-primary {
-    background: var(--text);
-    color: white;
-  }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 7px; font-family: var(--font); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap; }
+  .btn-primary { background: var(--text); color: white; }
   .btn-primary:hover { background: #333; }
-
-  .btn-secondary {
-    background: transparent;
-    color: var(--text);
-    border: 0.5px solid var(--border);
-  }
+  .btn-secondary { background: transparent; color: var(--text); border: 0.5px solid var(--border); }
   .btn-secondary:hover { background: var(--bg); }
-
-  .btn-danger {
-    background: transparent;
-    color: var(--critico);
-    border: 0.5px solid var(--critico-border);
-  }
-  .btn-danger:hover { background: var(--critico-bg); }
-
-  .btn-meta {
-    background: #1877F2;
-    color: white;
-    gap: 8px;
-  }
+  .btn-meta { background: #1877F2; color: white; }
   .btn-meta:hover { background: #166be0; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-full { width: 100%; justify-content: center; }
+  .btn-link { background: none; border: none; color: #1877F2; font-size: 13px; cursor: pointer; font-family: var(--font); padding: 0; text-decoration: underline; }
 
-  .btn-meta svg { width: 16px; height: 16px; fill: white; }
-
-  .btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  /* MAIN CONTENT */
-  main {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 32px 24px;
-  }
-
-  /* STATES */
   .state { display: none; }
   .state.active { display: block; }
 
-  /* PRE-LOGIN STATE */
-  #state-prelogin {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: calc(100vh - 56px);
-    text-align: center;
-    padding: 40px 24px;
-  }
+  /* AUTH */
+  #state-auth { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 56px); padding: 40px 24px; }
+  #state-auth.active { display: flex; }
+  .auth-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 40px; max-width: 380px; width: 100%; }
+  .auth-logo { width: 48px; height: 48px; background: var(--text); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+  .auth-card h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; text-align: center; margin-bottom: 4px; }
+  .auth-subtitle { font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 28px; }
+  .auth-tabs { display: flex; border: 0.5px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+  .auth-tab { flex: 1; padding: 8px; font-family: var(--font); font-size: 13px; font-weight: 500; border: none; background: transparent; cursor: pointer; color: var(--text-muted); transition: all 0.15s; }
+  .auth-tab.active { background: var(--text); color: white; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 5px; }
+  .form-input { width: 100%; padding: 9px 12px; border: 0.5px solid var(--border); border-radius: 7px; font-family: var(--font); font-size: 13px; color: var(--text); background: var(--bg); outline: none; transition: border-color 0.15s; }
+  .form-input:focus { border-color: var(--text); background: white; }
+  .auth-divider { text-align: center; font-size: 12px; color: var(--text-faint); margin: 16px 0; }
+  .auth-msg { border-radius: 6px; padding: 8px 12px; font-size: 12px; margin-bottom: 14px; display: none; }
+  .auth-msg.visible { display: block; }
+  .auth-msg.error { background: var(--critico-bg); border: 0.5px solid var(--critico-border); color: var(--critico); }
+  .auth-msg.success { background: var(--ok-bg); border: 0.5px solid var(--ok-border); color: var(--ok); }
 
-  .prelogin-card {
-    background: var(--surface);
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius);
-    padding: 48px;
-    max-width: 420px;
-    width: 100%;
-  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+  .steps { display: flex; gap: 6px; align-items: center; margin-bottom: 28px; }
+  .step { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-faint); }
+  .step.active { color: var(--text); } .step.done { color: var(--ok); }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 11px; font-family: var(--mono); }
+  .step-sep { height: 1px; width: 24px; background: var(--border); flex-shrink: 0; }
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+  .section-header { margin-bottom: 20px; }
+  .section-header h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; margin-bottom: 4px; }
+  .section-header p { color: var(--text-muted); font-size: 13px; }
 
-  .prelogin-icon {
-    width: 56px;
-    height: 56px;
-    background: var(--bg);
-    border-radius: 12px;
-    border: 0.5px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 24px;
-  }
+  .meta-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); border: 0.5px solid var(--border); border-radius: 8px; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+  .meta-bar-text { font-size: 13px; color: var(--text-muted); }
 
-  .prelogin-icon svg { width: 28px; height: 28px; }
-
-  .prelogin-card h2 {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    letter-spacing: -0.4px;
-  }
-
-  .prelogin-card p {
-    color: var(--text-muted);
-    font-size: 13px;
-    margin-bottom: 28px;
-    line-height: 1.6;
-  }
-
-  /* SECTION HEADERS */
-  .section-header {
-    margin-bottom: 20px;
-  }
-
-  .section-header h2 {
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: -0.3px;
-    margin-bottom: 4px;
-  }
-
-  .section-header p {
-    color: var(--text-muted);
-    font-size: 13px;
-  }
-
-  /* STEP INDICATOR */
-  .steps {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    margin-bottom: 28px;
-  }
-
-  .step {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-faint);
-  }
-
-  .step.active { color: var(--text); }
-  .step.done { color: var(--ok); }
-
-  .step-num {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    border: 1px solid currentColor;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-family: var(--mono);
-  }
-
-  .step-sep {
-    height: 1px;
-    width: 24px;
-    background: var(--border);
-    flex-shrink: 0;
-  }
-
-  /* CARD */
-  .card {
-    background: var(--surface);
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius);
-    padding: 24px;
-    margin-bottom: 16px;
-  }
-
-  /* SEARCH */
-  .search-wrap {
-    position: relative;
-    margin-bottom: 12px;
-  }
-
-  .search-wrap svg {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 14px;
-    height: 14px;
-    color: var(--text-faint);
-  }
-
-  .search-input {
-    width: 100%;
-    padding: 8px 10px 8px 32px;
-    border: 0.5px solid var(--border);
-    border-radius: 7px;
-    font-family: var(--font);
-    font-size: 13px;
-    background: var(--bg);
-    color: var(--text);
-    outline: none;
-    transition: border-color 0.15s;
-  }
-
+  .search-wrap { position: relative; margin-bottom: 12px; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; pointer-events: none; color: var(--text-faint); }
+  .search-input { width: 100%; padding: 8px 10px 8px 32px; border: 0.5px solid var(--border); border-radius: 7px; font-family: var(--font); font-size: 13px; background: var(--bg); color: var(--text); outline: none; }
   .search-input:focus { border-color: var(--text); background: white; }
 
-  /* ACCOUNTS LIST */
-  .accounts-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
+  .accts-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+  .accts-count { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+  .accts-list { border: 0.5px solid var(--border); border-radius: 7px; max-height: 360px; overflow-y: auto; }
+  .acct-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 0.5px solid var(--border); cursor: pointer; transition: background 0.1s; user-select: none; }
+  .acct-item:last-child { border-bottom: none; } .acct-item:hover { background: var(--bg); }
+  .acct-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--text); cursor: pointer; flex-shrink: 0; }
+  .acct-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acct-id { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+  .accts-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 10px; }
+  .sel-count { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+  .sel-count span { color: var(--text); font-family: var(--mono); }
+  .loading-row { padding: 28px; text-align: center; color: var(--text-muted); font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .mini-spin { width: 14px; height: 14px; border: 1.5px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
 
-  .accounts-count {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-family: var(--mono);
-  }
-
-  .accounts-actions {
-    display: flex;
-    gap: 6px;
-  }
-
-  .accounts-list {
-    border: 0.5px solid var(--border);
-    border-radius: 7px;
-    max-height: 320px;
-    overflow-y: auto;
-  }
-
-  .account-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    border-bottom: 0.5px solid var(--border);
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-
-  .account-item:last-child { border-bottom: none; }
-  .account-item:hover { background: var(--bg); }
-
-  .account-item input[type="checkbox"] {
-    width: 15px;
-    height: 15px;
-    accent-color: var(--text);
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .account-item-info { flex: 1; min-width: 0; }
-
-  .account-name {
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .account-id {
-    font-size: 11px;
-    color: var(--text-faint);
-    font-family: var(--mono);
-  }
-
-  .accounts-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 16px;
-  }
-
-  .selected-count {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-muted);
-  }
-
-  .selected-count span {
-    color: var(--text);
-    font-family: var(--mono);
-  }
-
-  /* PERIOD CONFIG */
-  .periods-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 20px;
-  }
-
-  @media (max-width: 600px) {
-    .periods-grid { grid-template-columns: 1fr; }
-  }
-
-  .period-block {
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-  }
-
-  .period-block h3 {
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--text-muted);
-    margin-bottom: 12px;
-  }
-
-  .presets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-bottom: 12px;
-  }
-
-  .preset-btn {
-    padding: 4px 9px;
-    border-radius: 5px;
-    font-family: var(--font);
-    font-size: 11px;
-    font-weight: 500;
-    cursor: pointer;
-    border: 0.5px solid var(--border);
-    background: var(--bg);
-    color: var(--text-muted);
-    transition: all 0.12s;
-  }
-
-  .preset-btn:hover { background: var(--surface); color: var(--text); border-color: rgba(0,0,0,0.25); }
+  .periods-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media(max-width:600px){.periods-grid{grid-template-columns:1fr;}}
+  .period-block { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .period-block h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 12px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+  .preset-btn { padding: 4px 9px; border-radius: 5px; font-family: var(--font); font-size: 11px; font-weight: 500; cursor: pointer; border: 0.5px solid var(--border); background: var(--bg); color: var(--text-muted); transition: all .12s; }
+  .preset-btn:hover { background: var(--surface); color: var(--text); }
   .preset-btn.active { background: var(--text); color: white; border-color: var(--text); }
-
-  .date-range {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .date-field label {
-    display: block;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-  }
-
-  .date-field input {
-    width: 100%;
-    padding: 7px 10px;
-    border: 0.5px solid var(--border);
-    border-radius: 6px;
-    font-family: var(--font);
-    font-size: 12px;
-    color: var(--text);
-    background: white;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-
+  .date-range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .date-field label { display: block; font-size: 11px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
+  .date-field input { width: 100%; padding: 7px 10px; border: 0.5px solid var(--border); border-radius: 6px; font-family: var(--font); font-size: 12px; color: var(--text); background: white; outline: none; }
   .date-field input:focus { border-color: var(--text); }
+  .period-hint { font-size: 11px; color: var(--text-faint); margin-top: 8px; font-style: italic; min-height: 16px; }
 
-  /* BUDGETS */
-  .budgets-section {
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    margin-bottom: 20px;
-  }
-
-  .budgets-header {
-    padding: 12px 16px;
-    background: var(--bg);
-    border-bottom: 0.5px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .budgets-header h3 {
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .badge-optional {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-faint);
-    background: white;
-    border: 0.5px solid var(--border);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  .budget-row {
-    display: flex;
-    align-items: center;
-    padding: 10px 16px;
-    border-bottom: 0.5px solid var(--border);
-    gap: 12px;
-  }
-
+  .budgets-section { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; }
+  .budgets-hdr { padding: 12px 16px; background: var(--bg); border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .budgets-hdr h3 { font-size: 13px; font-weight: 600; }
+  .badge-opt { font-size: 10px; font-weight: 500; color: var(--text-faint); background: white; border: 0.5px solid var(--border); padding: 2px 6px; border-radius: 4px; }
+  .budget-row { display: flex; align-items: center; padding: 10px 16px; border-bottom: 0.5px solid var(--border); gap: 12px; flex-wrap: wrap; }
   .budget-row:last-child { border-bottom: none; }
-
-  .budget-account-name {
-    flex: 1;
-    font-size: 13px;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .budget-input-wrap {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-  }
-
-  .budget-input-wrap span {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-family: var(--mono);
-  }
-
-  .budget-input {
-    width: 110px;
-    padding: 5px 8px;
-    border: 0.5px solid var(--border);
-    border-radius: 6px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text);
-    outline: none;
-    text-align: right;
-  }
-
+  .budget-acct-name { flex: 1; font-size: 13px; min-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .budget-ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .budget-type { padding: 5px 8px; border: 0.5px solid var(--border); border-radius: 6px; font-family: var(--font); font-size: 12px; color: var(--text); background: white; outline: none; cursor: pointer; }
+  .brl-wrap { display: flex; align-items: center; gap: 5px; }
+  .brl-wrap span { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+  .budget-input { width: 100px; padding: 5px 8px; border: 0.5px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 12px; color: var(--text); outline: none; text-align: right; }
   .budget-input:focus { border-color: var(--text); }
+  .budget-calc { font-size: 11px; color: var(--text-faint); font-family: var(--mono); min-width: 120px; }
 
-  /* PROGRESS */
-  .progress-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(248,248,246,0.92);
-    z-index: 200;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-  }
+  .progress-overlay { display: none; position: fixed; inset: 0; background: rgba(248,248,246,.92); z-index: 200; flex-direction: column; align-items: center; justify-content: center; }
+  .progress-overlay.visible { display: flex; }
+  .progress-card { background: white; border: 0.5px solid var(--border); border-radius: var(--radius); padding: 32px 40px; text-align: center; min-width: 280px; }
+  .progress-spin { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .progress-lbl { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .progress-sub { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+  .progress-bar-wrap { width: 100%; height: 3px; background: var(--bg); border-radius: 2px; margin-top: 16px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--text); border-radius: 2px; transition: width .3s; width: 0%; }
 
-  .progress-overlay.visible {
-    display: flex;
-  }
-
-  .progress-card {
-    background: white;
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius);
-    padding: 32px 40px;
-    text-align: center;
-    min-width: 280px;
-  }
-
-  .progress-spinner {
-    width: 32px;
-    height: 32px;
-    border: 2px solid var(--border);
-    border-top-color: var(--text);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 16px;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .progress-label {
-    font-size: 14px;
-    font-weight: 500;
-    margin-bottom: 4px;
-  }
-
-  .progress-sub {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-family: var(--mono);
-  }
-
-  .progress-bar-wrap {
-    width: 100%;
-    height: 3px;
-    background: var(--bg);
-    border-radius: 2px;
-    margin-top: 16px;
-    overflow: hidden;
-  }
-
-  .progress-bar {
-    height: 100%;
-    background: var(--text);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-    width: 0%;
-  }
-
-  /* DASHBOARD */
-  .dashboard-summary {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 24px;
-  }
-
-  @media (max-width: 640px) {
-    .dashboard-summary { grid-template-columns: repeat(2, 1fr); }
-  }
-
-  .summary-card {
-    background: var(--surface);
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-  }
-
-  .summary-card .label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
-  }
-
-  .summary-card .value {
-    font-size: 26px;
-    font-weight: 600;
-    letter-spacing: -1px;
-    font-family: var(--mono);
-  }
-
+  .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 24px; }
+  @media(max-width:640px){.summary-grid{grid-template-columns:repeat(2,1fr);}}
+  .summary-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .summary-card .lbl { font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .summary-card .val { font-size: 26px; font-weight: 600; letter-spacing: -1px; font-family: var(--mono); }
   .summary-card.critico { border-color: var(--critico-border); background: var(--critico-bg); }
-  .summary-card.critico .value { color: var(--critico); }
+  .summary-card.critico .val { color: var(--critico); }
   .summary-card.atencao { border-color: var(--atencao-border); background: var(--atencao-bg); }
-  .summary-card.atencao .value { color: var(--atencao); }
+  .summary-card.atencao .val { color: var(--atencao); }
   .summary-card.ok { border-color: var(--ok-border); background: var(--ok-bg); }
-  .summary-card.ok .value { color: var(--ok); }
+  .summary-card.ok .val { color: var(--ok); }
 
-  .dashboard-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-  }
-
-  .dashboard-toolbar h3 {
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  /* ACCOUNT CARDS */
-  .account-card {
-    background: var(--surface);
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius);
-    margin-bottom: 10px;
-    overflow: hidden;
-    transition: box-shadow 0.15s;
-  }
-
-  .account-card:hover {
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  }
-
-  .account-card.critico { border-left: 3px solid var(--critico); }
-  .account-card.atencao { border-left: 3px solid var(--atencao); }
-  .account-card.ok { border-left: 3px solid var(--ok); }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    border-bottom: 0.5px solid var(--border);
-    gap: 12px;
-  }
-
-  .card-header-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .card-title {
-    font-size: 14px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .card-id {
-    font-size: 11px;
-    color: var(--text-faint);
-    font-family: var(--mono);
-    white-space: nowrap;
-  }
-
-  .priority-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    flex-shrink: 0;
-  }
-
-  .priority-badge.critico { background: var(--critico-bg); color: var(--critico); border: 0.5px solid var(--critico-border); }
-  .priority-badge.atencao { background: var(--atencao-bg); color: var(--atencao); border: 0.5px solid var(--atencao-border); }
-  .priority-badge.ok { background: var(--ok-bg); color: var(--ok); border: 0.5px solid var(--ok-border); }
-
-  .card-body {
-    padding: 16px 18px;
-  }
-
-  /* METRICS */
-  .metrics-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 12px;
-    margin-bottom: 14px;
-  }
-
-  .metric-item {
-    padding: 10px 12px;
-    background: var(--bg);
-    border-radius: 7px;
-    border: 0.5px solid var(--border);
-  }
-
-  .metric-label {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-faint);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
-  }
-
-  .metric-value {
-    font-size: 17px;
-    font-weight: 600;
-    font-family: var(--mono);
-    letter-spacing: -0.5px;
-  }
-
-  .metric-prev {
-    font-size: 11px;
-    color: var(--text-faint);
-    font-family: var(--mono);
-    margin-top: 2px;
-  }
-
-  .metric-change {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font-size: 11px;
-    font-weight: 600;
-    font-family: var(--mono);
-    margin-top: 2px;
-  }
-
-  .metric-change.up { color: var(--ok); }
-  .metric-change.down { color: var(--critico); }
-  .metric-change.neutral { color: var(--text-faint); }
-
-  /* TODAY SPEND */
-  .today-spend {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--bg);
-    border-radius: 7px;
-    border: 0.5px solid var(--border);
-    margin-bottom: 14px;
-  }
-
-  .today-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .today-value {
-    font-size: 15px;
-    font-weight: 600;
-    font-family: var(--mono);
-    letter-spacing: -0.3px;
-  }
-
+  .acct-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; transition: box-shadow .15s; animation: slideIn .25s ease both; }
+  .acct-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .acct-card.critico { border-left: 3px solid var(--critico); }
+  .acct-card.atencao { border-left: 3px solid var(--atencao); }
+  .acct-card.ok { border-left: 3px solid var(--ok); }
+  @keyframes slideIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  .card-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 0.5px solid var(--border); gap: 12px; flex-wrap: wrap; }
+  .card-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-id-lbl { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+  .pri-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: .3px; }
+  .pri-badge.critico { background: var(--critico-bg); color: var(--critico); border: 0.5px solid var(--critico-border); }
+  .pri-badge.atencao { background: var(--atencao-bg); color: var(--atencao); border: 0.5px solid var(--atencao-border); }
+  .pri-badge.ok { background: var(--ok-bg); color: var(--ok); border: 0.5px solid var(--ok-border); }
+  .card-body { padding: 16px 18px; }
+  .metrics-row { display: grid; grid-template-columns: repeat(auto-fit,minmax(130px,1fr)); gap: 12px; margin-bottom: 14px; }
+  .metric { padding: 10px 12px; background: var(--bg); border-radius: 7px; border: 0.5px solid var(--border); }
+  .metric-lbl { font-size: 10px; font-weight: 500; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .metric-val { font-size: 17px; font-weight: 600; font-family: var(--mono); letter-spacing: -.5px; }
+  .metric-prev { font-size: 11px; color: var(--text-faint); font-family: var(--mono); margin-top: 2px; }
+  .chg { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; font-family: var(--mono); margin-top: 2px; }
+  .chg.up { color: var(--ok); } .chg.down { color: var(--critico); }
+  .bbar-sec { margin-bottom: 14px; }
+  .bbar-hdr { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 11px; }
+  .bbar-track { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bbar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  .bbar-fill.critico{background:var(--critico);} .bbar-fill.atencao{background:var(--atencao);} .bbar-fill.ok{background:var(--ok);}
+  .alerts { display: flex; flex-direction: column; gap: 5px; }
+  .alert-item { display: flex; align-items: flex-start; gap: 7px; padding: 7px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; line-height: 1.4; }
+  .alert-item.critico{background:var(--critico-bg);color:var(--critico);} .alert-item.atencao{background:var(--atencao-bg);color:var(--atencao);} .alert-item.ok{background:var(--ok-bg);color:var(--ok);}
+  .alert-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; margin-top: 5px; }
+  .err-banner { background: var(--critico-bg); border: 0.5px solid var(--critico-border); border-radius: 7px; padding: 10px 14px; font-size: 12px; color: var(--critico); margin-bottom: 12px; display: none; }
+  .err-banner.visible { display: block; }
+  .empty { text-align: center; padding: 48px 24px; color: var(--text-faint); font-size: 13px; }
+  .today-val { font-size: 15px; font-weight: 600; font-family: var(--mono); }
   .today-zero { color: var(--critico); }
-
-  /* BUDGET BAR */
-  .budget-bar-section {
-    margin-bottom: 14px;
-  }
-
-  .budget-bar-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 5px;
-    font-size: 11px;
-  }
-
-  .budget-bar-label { color: var(--text-muted); font-weight: 500; }
-  .budget-bar-pct { font-family: var(--mono); font-weight: 600; }
-
-  .budget-bar-track {
-    height: 5px;
-    background: var(--border);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-
-  .budget-bar-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.4s ease;
-  }
-
-  .budget-bar-fill.critico { background: var(--critico); }
-  .budget-bar-fill.atencao { background: var(--atencao); }
-  .budget-bar-fill.ok { background: var(--ok); }
-
-  /* ALERTS */
-  .alerts-list {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .alert-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    padding: 7px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.4;
-  }
-
-  .alert-item.critico { background: var(--critico-bg); color: var(--critico); }
-  .alert-item.atencao { background: var(--atencao-bg); color: var(--atencao); }
-  .alert-item.ok { background: var(--ok-bg); color: var(--ok); }
-
-  .alert-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: currentColor;
-    flex-shrink: 0;
-    margin-top: 5px;
-  }
-
-  /* LOADING SKELETON */
-  .skeleton {
-    background: linear-gradient(90deg, var(--bg) 25%, #eeeee8 50%, var(--bg) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.4s infinite;
-    border-radius: 6px;
-  }
-
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
-  /* EMPTY STATE */
-  .empty-state {
-    text-align: center;
-    padding: 48px 24px;
-    color: var(--text-faint);
-  }
-
-  .empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4; }
-  .empty-state p { font-size: 13px; }
-
-  /* ERROR */
-  .error-banner {
-    background: var(--critico-bg);
-    border: 0.5px solid var(--critico-border);
-    border-radius: 7px;
-    padding: 10px 14px;
-    font-size: 12px;
-    color: var(--critico);
-    margin-bottom: 12px;
-    display: none;
-  }
-
-  .error-banner.visible { display: block; }
-
-  /* LOADING ACCOUNTS */
-  .loading-accounts {
-    padding: 24px;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .mini-spinner {
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid var(--border);
-    border-top-color: var(--text);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  .divider {
-    height: 0.5px;
-    background: var(--border);
-    margin: 20px 0;
-  }
-
-  /* RESPONSIVE */
-  @media (max-width: 480px) {
-    main { padding: 20px 16px; }
-    .card { padding: 16px; }
-    .metrics-row { grid-template-columns: repeat(2, 1fr); }
-  }
-
-  /* ANIMATIONS */
-  .account-card {
-    animation: fadeSlideIn 0.25s ease both;
-  }
-
-  @keyframes fadeSlideIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+  @media(max-width:480px){main{padding:20px 16px;}.card{padding:16px;}.metrics-row{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
 <body>
@@ -948,175 +189,165 @@
 <header>
   <div class="logo">
     <div class="logo-icon">
-      <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+      <svg viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.2" width="16" height="16">
+        <circle cx="8" cy="8" r="2.5" fill="white" stroke="none"/>
+        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+      </svg>
     </div>
     Radar de Prioridade
   </div>
   <div class="header-right">
-    <span class="user-info" id="user-info"></span>
-    <button class="btn btn-meta" id="btn-login" onclick="handleLogin()">
-      <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-      Conectar com Meta
-    </button>
-    <button class="btn btn-danger" id="btn-logout" style="display:none" onclick="handleLogout()">Desconectar</button>
+    <div class="save-indicator" id="save-indicator">
+      <svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="var(--ok)"/></svg>
+      Salvo na nuvem
+    </div>
+    <div class="user-chip" id="user-chip">
+      <div class="avatar" id="user-avatar">?</div>
+      <span id="user-name-label"></span>
+    </div>
+    <button class="btn btn-secondary" id="btn-logout" style="display:none" onclick="handleLogout()">Sair</button>
   </div>
 </header>
 
-<!-- PRE-LOGIN -->
-<div id="state-prelogin" class="state active">
-  <div class="prelogin-card">
-    <div class="prelogin-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+<!-- AUTH -->
+<div id="state-auth" class="state active">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" width="26" height="26">
+        <circle cx="12" cy="12" r="3" fill="white" stroke="none"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
     </div>
     <h2>Radar de Prioridade</h2>
-    <p>Monitore suas contas Meta Ads e identifique alertas críticos com agilidade. Conecte sua conta para começar.</p>
-    <button class="btn btn-meta" style="width:100%;justify-content:center" onclick="handleLogin()">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-      Continuar com Facebook
-    </button>
+    <p class="auth-subtitle">Monitoramento de campanhas Meta Ads</p>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Entrar</button>
+      <button class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Criar conta</button>
+    </div>
+    <div id="auth-msg" class="auth-msg"></div>
+
+    <div id="form-login">
+      <div class="form-group"><label>E-mail</label><input type="email" class="form-input" id="login-email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="form-group"><label>Senha</label><input type="password" class="form-input" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn btn-primary btn-full" id="btn-login" onclick="doLogin()">Entrar</button>
+      <div class="auth-divider">―</div>
+      <div style="text-align:center"><button class="btn-link" onclick="switchTab('forgot')">Esqueci minha senha</button></div>
+    </div>
+
+    <div id="form-signup" style="display:none">
+      <div class="form-group"><label>Nome</label><input type="text" class="form-input" id="signup-name" placeholder="Seu nome"></div>
+      <div class="form-group"><label>E-mail</label><input type="email" class="form-input" id="signup-email" placeholder="seu@email.com"></div>
+      <div class="form-group"><label>Senha</label><input type="password" class="form-input" id="signup-password" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter')doSignup()"></div>
+      <button class="btn btn-primary btn-full" id="btn-signup" onclick="doSignup()">Criar conta</button>
+    </div>
+
+    <div id="form-forgot" style="display:none">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Digite seu e-mail e enviaremos um link para redefinir sua senha.</p>
+      <div class="form-group"><label>E-mail</label><input type="email" class="form-input" id="forgot-email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')doForgot()"></div>
+      <button class="btn btn-primary btn-full" onclick="doForgot()">Enviar link</button>
+      <div class="auth-divider">―</div>
+      <div style="text-align:center"><button class="btn-link" onclick="switchTab('login')">← Voltar ao login</button></div>
+    </div>
   </div>
 </div>
 
-<!-- STEP 1: SELECT ACCOUNTS -->
+<!-- STEP 1 -->
 <div id="state-accounts" class="state">
   <main>
     <div class="steps">
-      <div class="step active" id="step1">
-        <div class="step-num">1</div>
-        <span>Contas</span>
-      </div>
+      <div class="step active"><div class="step-num">1</div><span>Contas</span></div>
       <div class="step-sep"></div>
-      <div class="step" id="step2">
-        <div class="step-num">2</div>
-        <span>Período</span>
-      </div>
+      <div class="step"><div class="step-num">2</div><span>Período</span></div>
       <div class="step-sep"></div>
-      <div class="step" id="step3">
-        <div class="step-num">3</div>
-        <span>Radar</span>
-      </div>
+      <div class="step"><div class="step-num">3</div><span>Radar</span></div>
     </div>
-
     <div class="section-header">
       <h2>Selecionar contas para monitorar</h2>
-      <p>Escolha as contas de anúncios que deseja incluir no radar.</p>
+      <p>Sua seleção fica salva automaticamente na nuvem — acessível em qualquer dispositivo.</p>
     </div>
 
-    <div class="card">
-      <div class="error-banner" id="accounts-error"></div>
+    <div class="meta-bar" id="meta-bar">
+      <div class="meta-bar-text">Conecte sua conta Meta para listar as contas de anúncios.</div>
+      <button class="btn btn-meta" onclick="handleMetaLogin()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        Conectar com Meta
+      </button>
+    </div>
 
+    <div class="card" id="accounts-card" style="display:none">
+      <div class="err-banner" id="accounts-error"></div>
       <div class="search-wrap">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="5"/><path d="m10.5 10.5 3 3"/></svg>
-        <input type="text" class="search-input" id="search-accounts" placeholder="Buscar por nome da conta..." oninput="filterAccounts()">
+        <svg class="search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="5"/><path d="m10.5 10.5 3 3"/></svg>
+        <input type="text" class="search-input" id="search-input" placeholder="Buscar por nome da conta..." oninput="filterAccounts()">
       </div>
-
-      <div class="accounts-toolbar">
-        <div class="accounts-count" id="accounts-count">Carregando...</div>
-        <div class="accounts-actions">
+      <div class="accts-toolbar">
+        <div class="accts-count" id="accts-count">Carregando...</div>
+        <div style="display:flex;gap:6px">
           <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px" onclick="selectAll()">Selecionar todas</button>
           <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px" onclick="clearAll()">Limpar</button>
         </div>
       </div>
-
-      <div class="accounts-list" id="accounts-list">
-        <div class="loading-accounts">
-          <div class="mini-spinner"></div>
-          Carregando contas...
-        </div>
+      <div class="accts-list" id="accts-list">
+        <div class="loading-row"><div class="mini-spin"></div>Carregando contas...</div>
       </div>
-
-      <div class="accounts-footer">
-        <div class="selected-count">
-          <span id="selected-count-num">0</span> contas selecionadas
-        </div>
+      <div class="accts-footer">
+        <div class="sel-count"><span id="sel-count-num">0</span> conta(s) selecionada(s)</div>
         <button class="btn btn-primary" id="btn-continue" onclick="goToConfig()" disabled>Continuar →</button>
       </div>
     </div>
   </main>
 </div>
 
-<!-- STEP 2: CONFIG PERIODS -->
+<!-- STEP 2 -->
 <div id="state-config" class="state">
   <main>
     <div class="steps">
-      <div class="step done" id="step1c">
-        <div class="step-num">✓</div>
-        <span>Contas</span>
-      </div>
+      <div class="step done"><div class="step-num">✓</div><span>Contas</span></div>
       <div class="step-sep"></div>
-      <div class="step active" id="step2c">
-        <div class="step-num">2</div>
-        <span>Período</span>
-      </div>
+      <div class="step active"><div class="step-num">2</div><span>Período</span></div>
       <div class="step-sep"></div>
-      <div class="step" id="step3c">
-        <div class="step-num">3</div>
-        <span>Radar</span>
-      </div>
+      <div class="step"><div class="step-num">3</div><span>Radar</span></div>
     </div>
-
     <div class="section-header">
       <h2>Configurar períodos de análise</h2>
-      <p>Defina os períodos atual e anterior para comparação de desempenho.</p>
+      <p>Defina o período atual e o anterior para comparação de desempenho.</p>
     </div>
-
     <div class="card">
       <div class="periods-grid">
-        <!-- Período Atual -->
         <div class="period-block">
           <h3>Período Atual</h3>
           <div class="presets" id="presets-cur">
-            <button class="preset-btn" onclick="applyPreset('cur','today')">Hoje</button>
-            <button class="preset-btn" onclick="applyPreset('cur','yesterday')">Ontem</button>
-            <button class="preset-btn" onclick="applyPreset('cur','last7')">Últimos 7 dias</button>
-            <button class="preset-btn" onclick="applyPreset('cur','last30')">Últimos 30 dias</button>
-            <button class="preset-btn" onclick="applyPreset('cur','thismonth')">Mês atual</button>
-            <button class="preset-btn" onclick="applyPreset('cur','lastmonth')">Mês passado</button>
+            <button class="preset-btn" onclick="applyPreset('cur','today',this)">Hoje</button>
+            <button class="preset-btn" onclick="applyPreset('cur','yesterday',this)">Ontem</button>
+            <button class="preset-btn" onclick="applyPreset('cur','last7',this)">Últimos 7 dias</button>
+            <button class="preset-btn" onclick="applyPreset('cur','last30',this)">Últimos 30 dias</button>
+            <button class="preset-btn" onclick="applyPreset('cur','thismonth',this)">Mês atual</button>
+            <button class="preset-btn" onclick="applyPreset('cur','lastmonth',this)">Mês passado</button>
           </div>
           <div class="date-range">
-            <div class="date-field">
-              <label>Início</label>
-              <input type="date" id="cur-start">
-            </div>
-            <div class="date-field">
-              <label>Fim</label>
-              <input type="date" id="cur-end">
-            </div>
+            <div class="date-field"><label>Início</label><input type="date" id="cur-start" onchange="onCurChange()"></div>
+            <div class="date-field"><label>Fim</label><input type="date" id="cur-end" onchange="onCurChange()"></div>
           </div>
         </div>
-
-        <!-- Período Anterior -->
         <div class="period-block">
           <h3>Período Anterior</h3>
           <div class="presets" id="presets-prev">
-            <button class="preset-btn" onclick="applyPreset('prev','today')">Hoje</button>
-            <button class="preset-btn" onclick="applyPreset('prev','yesterday')">Ontem</button>
-            <button class="preset-btn" onclick="applyPreset('prev','last7')">Últimos 7 dias</button>
-            <button class="preset-btn" onclick="applyPreset('prev','last30')">Últimos 30 dias</button>
-            <button class="preset-btn" onclick="applyPreset('prev','thismonth')">Mês atual</button>
-            <button class="preset-btn" onclick="applyPreset('prev','lastmonth')">Mês passado</button>
+            <button class="preset-btn" onclick="applyPrevPreset('equivalent',this)">Período equivalente</button>
+            <button class="preset-btn" onclick="applyPrevPreset('prev7',this)">7 dias anteriores</button>
+            <button class="preset-btn" onclick="applyPrevPreset('prev30',this)">30 dias anteriores</button>
+            <button class="preset-btn" onclick="applyPrevPreset('prevmonth',this)">Mês anterior</button>
           </div>
           <div class="date-range">
-            <div class="date-field">
-              <label>Início</label>
-              <input type="date" id="prev-start">
-            </div>
-            <div class="date-field">
-              <label>Fim</label>
-              <input type="date" id="prev-end">
-            </div>
+            <div class="date-field"><label>Início</label><input type="date" id="prev-start" onchange="scheduleSave()"></div>
+            <div class="date-field"><label>Fim</label><input type="date" id="prev-end" onchange="scheduleSave()"></div>
           </div>
+          <div class="period-hint" id="prev-hint"></div>
         </div>
       </div>
-
       <div class="budgets-section">
-        <div class="budgets-header">
-          <h3>Orçamentos esperados</h3>
-          <span class="badge-optional">opcional</span>
-        </div>
+        <div class="budgets-hdr"><h3>Orçamentos esperados</h3><span class="badge-opt">opcional</span></div>
         <div id="budgets-list"></div>
       </div>
-
       <div style="display:flex;justify-content:space-between;align-items:center">
         <button class="btn btn-secondary" onclick="goToAccounts()">← Voltar</button>
         <button class="btn btn-primary" onclick="generateRadar()">Gerar Radar →</button>
@@ -1125,743 +356,603 @@
   </main>
 </div>
 
-<!-- STEP 3: DASHBOARD -->
+<!-- DASHBOARD -->
 <div id="state-dashboard" class="state">
   <main>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div>
         <h2 style="font-size:17px;font-weight:600;letter-spacing:-0.3px">Radar de Prioridade</h2>
-        <p id="dashboard-period-label" style="font-size:12px;color:var(--text-muted);margin-top:2px"></p>
+        <p id="dash-period" style="font-size:12px;color:var(--text-muted);margin-top:2px"></p>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="goToConfig()">← Reconfigurar</button>
         <button class="btn btn-primary" onclick="generateRadar()">↺ Atualizar</button>
       </div>
     </div>
-
-    <div class="dashboard-summary">
-      <div class="summary-card">
-        <div class="label">Monitoradas</div>
-        <div class="value" id="sum-total">-</div>
-      </div>
-      <div class="summary-card critico">
-        <div class="label">Crítico</div>
-        <div class="value" id="sum-critico">-</div>
-      </div>
-      <div class="summary-card atencao">
-        <div class="label">Atenção</div>
-        <div class="value" id="sum-atencao">-</div>
-      </div>
-      <div class="summary-card ok">
-        <div class="label">OK</div>
-        <div class="value" id="sum-ok">-</div>
-      </div>
+    <div class="summary-grid">
+      <div class="summary-card"><div class="lbl">Monitoradas</div><div class="val" id="sum-total">-</div></div>
+      <div class="summary-card critico"><div class="lbl">Crítico</div><div class="val" id="sum-critico">-</div></div>
+      <div class="summary-card atencao"><div class="lbl">Atenção</div><div class="val" id="sum-atencao">-</div></div>
+      <div class="summary-card ok"><div class="lbl">OK</div><div class="val" id="sum-ok">-</div></div>
     </div>
-
-    <div id="dashboard-cards"></div>
+    <div id="dash-cards"></div>
   </main>
 </div>
 
-<!-- PROGRESS OVERLAY -->
-<div class="progress-overlay" id="progress-overlay">
+<!-- PROGRESS -->
+<div class="progress-overlay" id="prog-overlay">
   <div class="progress-card">
-    <div class="progress-spinner"></div>
-    <div class="progress-label" id="progress-label">Buscando dados...</div>
-    <div class="progress-sub" id="progress-sub"></div>
-    <div class="progress-bar-wrap">
-      <div class="progress-bar" id="progress-bar"></div>
-    </div>
+    <div class="progress-spin"></div>
+    <div class="progress-lbl" id="prog-lbl">Buscando dados...</div>
+    <div class="progress-sub" id="prog-sub"></div>
+    <div class="progress-bar-wrap"><div class="progress-bar" id="prog-bar"></div></div>
   </div>
 </div>
 
 <script>
-// ─── CONFIGURATION ───────────────────────────────────────────────────────────
-const APP_ID = '1651232966033761'; // ← Substitua pelo seu App ID do Meta
-const API_VERSION = 'v19.0';
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const APP_ID        = '1651232966033761';
+const API_VERSION   = 'v19.0';
+const SUPABASE_URL  = 'https://aheucabennpukdjckmsvw.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZXVjYWJlbm5wdWtkamNrbXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDY2ODMsImV4cCI6MjA4OTYyMjY4M30.SEgiAhov3bGqcMVDJKB5ypYxA_57Ffkp1-W4ZgRluqg';
 
-// ─── STATE ───────────────────────────────────────────────────────────────────
-let accessToken = null;
-let userName = '';
-let allAccounts = [];
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─── GLOBAL STATE ─────────────────────────────────────────────────────────────
+let currentUser      = null;
+let accessToken      = null;
+let allAccounts      = [];
+let selectedIds      = new Set();   // persists across search filter
 let selectedAccounts = [];
-let config = {};
+let config           = {};
+let activePrevPreset = null;
+let saveTimer        = null;
+let savedBudgets     = {};
 
-// ─── META SDK ────────────────────────────────────────────────────────────────
+// ─── META SDK ─────────────────────────────────────────────────────────────────
 window.fbAsyncInit = function() {
-  FB.init({
-    appId: APP_ID,
-    cookie: true,
-    xfbml: false,
-    version: API_VERSION
-  });
-
-  FB.getLoginStatus(function(response) {
-    if (response.status === 'connected') {
-      accessToken = response.authResponse.accessToken;
-      onLogin();
-    }
-  });
+  FB.init({ appId: APP_ID, cookie: true, xfbml: false, version: API_VERSION });
+  FB.getLoginStatus(r => { if (r.status === 'connected') { accessToken = r.authResponse.accessToken; onMetaConnected(); } });
 };
+(function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(d.getElementById(id))return;js=d.createElement(s);js.id=id;js.src='https://connect.facebook.net/en_US/sdk.js';fjs.parentNode.insertBefore(js,fjs);}(document,'script','facebook-jssdk'));
 
-(function(d, s, id) {
-  var js, fjs = d.getElementsByTagName(s)[0];
-  if (d.getElementById(id)) return;
-  js = d.createElement(s); js.id = id;
-  js.src = 'https://connect.facebook.net/en_US/sdk.js';
-  fjs.parentNode.insertBefore(js, fjs);
-}(document, 'script', 'facebook-jssdk'));
+// ─── AUTH UI ──────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['login','signup','forgot'].forEach(t => document.getElementById('form-'+t).style.display = t===tab?'block':'none');
+  document.getElementById('tab-login').classList.toggle('active', tab==='login');
+  document.getElementById('tab-signup').classList.toggle('active', tab==='signup');
+  clearMsg();
+}
+function showMsg(msg, type='error') {
+  const el = document.getElementById('auth-msg');
+  el.textContent = msg; el.className = `auth-msg ${type} visible`;
+}
+function clearMsg() { document.getElementById('auth-msg').className = 'auth-msg'; }
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
-function handleLogin() {
-  FB.login(function(response) {
-    if (response.authResponse) {
-      accessToken = response.authResponse.accessToken;
-      onLogin();
-    }
-  }, {scope: 'ads_read,ads_management'});
+// ─── AUTH ACTIONS ─────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  if (!email||!pass) return showMsg('Preencha e-mail e senha.');
+  const btn = document.getElementById('btn-login');
+  btn.disabled=true; btn.textContent='Entrando...';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  btn.disabled=false; btn.textContent='Entrar';
+  if (error) return showMsg(error.message.includes('Invalid')?'E-mail ou senha incorretos.':error.message);
+  onAuthSuccess(data.user);
 }
 
-function handleLogout() {
-  FB.logout(function() {
-    accessToken = null;
-    userName = '';
-    allAccounts = [];
-    selectedAccounts = [];
-    document.getElementById('btn-login').style.display = 'inline-flex';
-    document.getElementById('btn-logout').style.display = 'none';
-    document.getElementById('user-info').style.display = 'none';
-    document.getElementById('user-info').textContent = '';
-    showState('prelogin');
-  });
+async function doSignup() {
+  const name  = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const pass  = document.getElementById('signup-password').value;
+  if (!name||!email||!pass) return showMsg('Preencha todos os campos.');
+  if (pass.length<6) return showMsg('Senha deve ter pelo menos 6 caracteres.');
+  const btn = document.getElementById('btn-signup');
+  btn.disabled=true; btn.textContent='Criando...';
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options:{ data:{ name } } });
+  btn.disabled=false; btn.textContent='Criar conta';
+  if (error) return showMsg(error.message);
+  if (data.session) onAuthSuccess(data.user);
+  else showMsg('Conta criada! Verifique seu e-mail para confirmar.','success');
 }
 
-function onLogin() {
-  FB.api('/me', {fields: 'name'}, function(res) {
-    if (res && res.name) {
-      userName = res.name;
-      document.getElementById('user-info').textContent = res.name;
-      document.getElementById('user-info').style.display = 'block';
-    }
-  });
-  document.getElementById('btn-login').style.display = 'none';
+async function doForgot() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) return showMsg('Digite seu e-mail.');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+  if (error) return showMsg(error.message);
+  showMsg('Link enviado! Verifique seu e-mail.','success');
+}
+
+async function handleLogout() {
+  await sb.auth.signOut();
+  try { FB.logout(()=>{}); } catch(e){}
+  currentUser=null; accessToken=null; allAccounts=[]; selectedIds=new Set();
+  document.getElementById('user-chip').style.display='none';
+  document.getElementById('btn-logout').style.display='none';
+  showState('auth');
+}
+
+function onAuthSuccess(user) {
+  currentUser = user;
+  const name = user.user_metadata?.name || user.email.split('@')[0];
+  document.getElementById('user-chip').style.display = 'flex';
+  document.getElementById('user-name-label').textContent = name;
+  document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
   document.getElementById('btn-logout').style.display = 'inline-flex';
   showState('accounts');
+  checkMetaStatus();
+}
+
+// Session on load
+sb.auth.getSession().then(({ data: { session } }) => { if (session) onAuthSuccess(session.user); });
+sb.auth.onAuthStateChange((event) => {
+  if (event==='PASSWORD_RECOVERY') { showState('auth'); switchTab('login'); showMsg('Você pode entrar agora com sua nova senha.','success'); }
+});
+
+// ─── META ─────────────────────────────────────────────────────────────────────
+function handleMetaLogin() {
+  FB.login(r => { if (r.authResponse) { accessToken=r.authResponse.accessToken; onMetaConnected(); } }, {scope:'ads_read,ads_management'});
+}
+function checkMetaStatus() {
+  if (typeof FB==='undefined') { setTimeout(checkMetaStatus,300); return; }
+  FB.getLoginStatus(r => {
+    if (r.status==='connected') { accessToken=r.authResponse.accessToken; onMetaConnected(); }
+    else { document.getElementById('meta-bar').style.display='flex'; document.getElementById('accounts-card').style.display='none'; }
+  });
+}
+function onMetaConnected() {
+  document.getElementById('meta-bar').style.display='none';
+  document.getElementById('accounts-card').style.display='block';
   loadAccounts();
 }
 
-// ─── NAVIGATION ──────────────────────────────────────────────────────────────
-function showState(state) {
-  document.querySelectorAll('.state').forEach(s => s.classList.remove('active'));
-  const map = {
-    prelogin: 'state-prelogin',
-    accounts: 'state-accounts',
-    config: 'state-config',
-    dashboard: 'state-dashboard'
-  };
-  const el = document.getElementById(map[state]);
-  if (el) el.classList.add('active');
+// ─── SUPABASE PROFILE ─────────────────────────────────────────────────────────
+async function loadProfile() {
+  if (!currentUser) return null;
+  try {
+    const { data } = await sb.from('radar_profiles').select('*').eq('user_id', currentUser.id).single();
+    return data;
+  } catch(e) { return null; }
 }
 
-function goToAccounts() { showState('accounts'); }
+async function saveProfile() {
+  if (!currentUser) return;
 
-function goToConfig() {
-  selectedAccounts = allAccounts.filter(a => {
-    const cb = document.getElementById('cb_' + a.id);
-    return cb && cb.checked;
+  // Collect budgets from form
+  const budgets = {};
+  selectedAccounts.forEach(a => {
+    const val  = parseFloat(document.getElementById(`budget_${a.id}`)?.value||0);
+    const type = document.getElementById(`btype_${a.id}`)?.value||'period';
+    if (val>0) budgets[a.id] = { value: val, type };
   });
-  if (selectedAccounts.length === 0) return;
-  buildBudgetFields();
-  showState('config');
+
+  const payload = {
+    user_id: currentUser.id,
+    selected_accounts: [...selectedIds],
+    budgets,
+    config: {
+      curStart:  document.getElementById('cur-start')?.value  || '',
+      curEnd:    document.getElementById('cur-end')?.value    || '',
+      prevStart: document.getElementById('prev-start')?.value || '',
+      prevEnd:   document.getElementById('prev-end')?.value   || '',
+    },
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await sb.from('radar_profiles').upsert(payload, { onConflict: 'user_id' });
+  if (!error) {
+    const el = document.getElementById('save-indicator');
+    el.classList.add('visible');
+    setTimeout(() => el.classList.remove('visible'), 2500);
+  }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveProfile, 1500);
 }
 
 // ─── LOAD ACCOUNTS ────────────────────────────────────────────────────────────
 async function loadAccounts() {
-  const list = document.getElementById('accounts-list');
-  list.innerHTML = '<div class="loading-accounts"><div class="mini-spinner"></div>Carregando contas...</div>';
+  document.getElementById('accts-list').innerHTML = '<div class="loading-row"><div class="mini-spin"></div>Carregando contas...</div>';
+  document.getElementById('accounts-error').classList.remove('visible');
 
   try {
     allAccounts = await fetchAllAccounts();
+    document.getElementById('accts-count').textContent = `${allAccounts.length} conta(s) disponíveis`;
+
+    // Load saved profile from Supabase
+    const profile = await loadProfile();
+    if (profile) {
+      if (profile.selected_accounts?.length) selectedIds = new Set(profile.selected_accounts);
+      if (profile.budgets) savedBudgets = profile.budgets;
+      if (profile.config) {
+        const c = profile.config;
+        if (c.curStart)  document.getElementById('cur-start').value  = c.curStart;
+        if (c.curEnd)    document.getElementById('cur-end').value    = c.curEnd;
+        if (c.prevStart) document.getElementById('prev-start').value = c.prevStart;
+        if (c.prevEnd)   document.getElementById('prev-end').value   = c.prevEnd;
+      }
+    }
+
     renderAccounts(allAccounts);
-    document.getElementById('accounts-count').textContent = `${allAccounts.length} contas disponíveis`;
-  } catch (e) {
+  } catch(e) {
     const err = document.getElementById('accounts-error');
-    err.textContent = 'Erro ao carregar contas: ' + (e.message || e);
+    err.textContent = 'Erro ao carregar contas: ' + (e.message||e);
     err.classList.add('visible');
-    list.innerHTML = '';
+    document.getElementById('accts-list').innerHTML = '';
   }
 }
 
 async function fetchAllAccounts() {
-  let accounts = [];
-  let url = `/me/adaccounts?fields=name,id,account_id&limit=200&access_token=${accessToken}`;
-
-  while (url) {
-    const data = await fbApiGet(url);
+  let accounts = [], cursor = null;
+  do {
+    const cp = cursor ? `&after=${cursor}` : '';
+    const data = await new Promise((res,rej) => {
+      FB.api(`/me/adaccounts?fields=name,id,account_id&limit=200${cp}&access_token=${accessToken}`, r => {
+        if (!r||r.error) rej(r?.error?.message||'API error'); else res(r);
+      });
+    });
     if (data.data) accounts.push(...data.data);
-    url = data.paging && data.paging.next ? data.paging.next.replace('https://graph.facebook.com/', '') : null;
-  }
-
+    cursor = data.paging?.cursors?.after && data.paging?.next ? data.paging.cursors.after : null;
+  } while (cursor);
   return accounts.map(a => ({
-    id: a.account_id || a.id.replace('act_', ''),
-    act_id: a.id,
-    name: a.name
+    id:     a.account_id || a.id.replace('act_',''),
+    act_id: a.id.startsWith('act_') ? a.id : `act_${a.account_id||a.id}`,
+    name:   a.name
   }));
 }
 
 function renderAccounts(accounts) {
-  const list = document.getElementById('accounts-list');
-  if (!accounts.length) {
-    list.innerHTML = '<div class="empty-state"><p>Nenhuma conta encontrada.</p></div>';
-    return;
-  }
-
+  const list = document.getElementById('accts-list');
+  if (!accounts.length) { list.innerHTML='<div class="empty">Nenhuma conta encontrada.</div>'; return; }
   list.innerHTML = accounts.map(a => `
-    <label class="account-item" for="cb_${a.id}">
-      <input type="checkbox" id="cb_${a.id}" value="${a.id}" onchange="updateSelectedCount()">
-      <div class="account-item-info">
-        <div class="account-name">${escHtml(a.name)}</div>
-        <div class="account-id">act_${a.id}</div>
+    <label class="acct-item" for="cb_${a.id}">
+      <input type="checkbox" id="cb_${a.id}" value="${a.id}"
+        ${selectedIds.has(a.id)?'checked':''}
+        onchange="toggleAccount('${a.id}',this.checked)">
+      <div style="flex:1;min-width:0">
+        <div class="acct-name">${escHtml(a.name)}</div>
+        <div class="acct-id">act_${a.id}</div>
       </div>
-    </label>
-  `).join('');
-
-  updateSelectedCount();
+    </label>`).join('');
+  updateSelCount();
 }
 
 function filterAccounts() {
-  const q = document.getElementById('search-accounts').value.toLowerCase();
-  const filtered = allAccounts.filter(a =>
-    a.name.toLowerCase().includes(q) || a.id.includes(q)
-  );
-  renderAccounts(filtered);
+  const q = document.getElementById('search-input').value.toLowerCase();
+  renderAccounts(allAccounts.filter(a => a.name.toLowerCase().includes(q)||a.id.includes(q)));
+}
+
+function toggleAccount(id, checked) {
+  if (checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateSelCount();
+  scheduleSave();
 }
 
 function selectAll() {
-  document.querySelectorAll('#accounts-list input[type="checkbox"]').forEach(cb => cb.checked = true);
-  updateSelectedCount();
+  document.querySelectorAll('#accts-list input[type=checkbox]').forEach(cb => { cb.checked=true; selectedIds.add(cb.value); });
+  updateSelCount(); scheduleSave();
 }
 
 function clearAll() {
-  document.querySelectorAll('#accounts-list input[type="checkbox"]').forEach(cb => cb.checked = false);
-  updateSelectedCount();
+  document.querySelectorAll('#accts-list input[type=checkbox]').forEach(cb => { cb.checked=false; selectedIds.delete(cb.value); });
+  updateSelCount(); scheduleSave();
 }
 
-function updateSelectedCount() {
-  const checked = document.querySelectorAll('#accounts-list input[type="checkbox"]:checked').length;
-  document.getElementById('selected-count-num').textContent = checked;
-  document.getElementById('btn-continue').disabled = checked === 0;
+function updateSelCount() {
+  document.getElementById('sel-count-num').textContent = selectedIds.size;
+  document.getElementById('btn-continue').disabled = selectedIds.size===0;
 }
 
-// ─── PERIOD PRESETS ───────────────────────────────────────────────────────────
-function formatDate(d) {
-  return d.toISOString().split('T')[0];
+// ─── NAVIGATION ───────────────────────────────────────────────────────────────
+function showState(s) {
+  document.querySelectorAll('.state').forEach(el => el.classList.remove('active'));
+  const map={auth:'state-auth',accounts:'state-accounts',config:'state-config',dashboard:'state-dashboard'};
+  document.getElementById(map[s])?.classList.add('active');
+}
+function goToAccounts() { showState('accounts'); }
+function goToConfig() {
+  selectedAccounts = allAccounts.filter(a => selectedIds.has(a.id));
+  if (!selectedAccounts.length) return;
+  buildBudgetFields();
+  showState('config');
 }
 
-function applyPreset(type, preset) {
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  let start, end;
+// ─── PRESETS ──────────────────────────────────────────────────────────────────
+function fmtD(d) { return d.toISOString().split('T')[0]; }
 
-  switch (preset) {
-    case 'today':
-      start = end = new Date(today);
-      break;
-    case 'yesterday':
-      start = end = new Date(today);
-      start.setDate(start.getDate() - 1);
-      end = new Date(start);
-      break;
-    case 'last7':
-      end = new Date(today);
-      start = new Date(today);
-      start.setDate(start.getDate() - 6);
-      break;
-    case 'last30':
-      end = new Date(today);
-      start = new Date(today);
-      start.setDate(start.getDate() - 29);
-      break;
-    case 'thismonth':
-      start = new Date(today.getFullYear(), today.getMonth(), 1);
-      end = new Date(today);
-      break;
-    case 'lastmonth':
-      start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      end = new Date(today.getFullYear(), today.getMonth(), 0);
-      break;
+function applyPreset(type, preset, btn) {
+  const t = new Date(); t.setHours(0,0,0,0);
+  let s,e;
+  if (preset==='today')    { s=e=new Date(t); }
+  else if (preset==='yesterday') { s=new Date(t);s.setDate(s.getDate()-1);e=new Date(s); }
+  else if (preset==='last7')    { e=new Date(t);s=new Date(t);s.setDate(s.getDate()-6); }
+  else if (preset==='last30')   { e=new Date(t);s=new Date(t);s.setDate(s.getDate()-29); }
+  else if (preset==='thismonth'){ s=new Date(t.getFullYear(),t.getMonth(),1);e=new Date(t); }
+  else if (preset==='lastmonth'){ s=new Date(t.getFullYear(),t.getMonth()-1,1);e=new Date(t.getFullYear(),t.getMonth(),0); }
+  document.getElementById(`${type}-start`).value = fmtD(s);
+  document.getElementById(`${type}-end`).value   = fmtD(e);
+  document.querySelectorAll(`#presets-${type} .preset-btn`).forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  scheduleSave();
+}
+
+function onCurChange() {
+  // Re-apply prev preset if active so it stays in sync
+  if (activePrevPreset) {
+    const activeBtn = document.querySelector('#presets-prev .preset-btn.active');
+    if (activeBtn) applyPrevPreset(activePrevPreset, activeBtn);
   }
-
-  document.getElementById(`${type}-start`).value = formatDate(start);
-  document.getElementById(`${type}-end`).value = formatDate(end);
-
-  document.querySelectorAll(`#presets-${type} .preset-btn`).forEach(btn => btn.classList.remove('active'));
-  event.target.classList.add('active');
+  scheduleSave();
 }
 
-// ─── BUDGET FIELDS ────────────────────────────────────────────────────────────
+function applyPrevPreset(preset, btn) {
+  activePrevPreset = preset;
+  const cs = document.getElementById('cur-start').value;
+  const ce = document.getElementById('cur-end').value;
+  const hint = document.getElementById('prev-hint');
+  document.querySelectorAll('#presets-prev .preset-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  if (preset==='equivalent') {
+    if (!cs||!ce) { hint.textContent='Selecione o período atual primeiro.'; return; }
+    const sd=new Date(cs+'T00:00:00'), ed=new Date(ce+'T00:00:00');
+    const days=Math.round((ed-sd)/86400000)+1;
+    const pe=new Date(sd); pe.setDate(pe.getDate()-1);
+    const ps=new Date(pe); ps.setDate(ps.getDate()-days+1);
+    document.getElementById('prev-start').value=fmtD(ps);
+    document.getElementById('prev-end').value=fmtD(pe);
+    hint.textContent=`${days} dia(s) imediatamente anteriores ao período atual`;
+  } else if (preset==='prev7') {
+    const ref=cs?new Date(cs+'T00:00:00'):new Date(today);
+    const pe=new Date(ref);pe.setDate(pe.getDate()-1);
+    const ps=new Date(pe);ps.setDate(ps.getDate()-6);
+    document.getElementById('prev-start').value=fmtD(ps);
+    document.getElementById('prev-end').value=fmtD(pe);
+    hint.textContent='7 dias anteriores ao início do período atual';
+  } else if (preset==='prev30') {
+    const ref=cs?new Date(cs+'T00:00:00'):new Date(today);
+    const pe=new Date(ref);pe.setDate(pe.getDate()-1);
+    const ps=new Date(pe);ps.setDate(ps.getDate()-29);
+    document.getElementById('prev-start').value=fmtD(ps);
+    document.getElementById('prev-end').value=fmtD(pe);
+    hint.textContent='30 dias anteriores ao início do período atual';
+  } else if (preset==='prevmonth') {
+    const ps=new Date(today.getFullYear(),today.getMonth()-1,1);
+    const pe=new Date(today.getFullYear(),today.getMonth(),0);
+    document.getElementById('prev-start').value=fmtD(ps);
+    document.getElementById('prev-end').value=fmtD(pe);
+    hint.textContent='Mês anterior ao atual';
+  }
+  scheduleSave();
+}
+
+// ─── BUDGETS ──────────────────────────────────────────────────────────────────
+function getPeriodDays() {
+  const s=document.getElementById('cur-start').value, e=document.getElementById('cur-end').value;
+  if(!s||!e)return null;
+  const d=(new Date(e+'T00:00:00')-new Date(s+'T00:00:00'))/86400000+1;
+  return d>0?d:null;
+}
+
 function buildBudgetFields() {
-  const container = document.getElementById('budgets-list');
-  container.innerHTML = selectedAccounts.map(a => `
+  document.getElementById('budgets-list').innerHTML = selectedAccounts.map(a => {
+    const sv = savedBudgets[a.id]||{};
+    return `
     <div class="budget-row">
-      <div class="budget-account-name">${escHtml(a.name)}</div>
-      <div class="budget-input-wrap">
-        <span>R$</span>
-        <input type="number" class="budget-input" id="budget_${a.id}" placeholder="0,00" min="0" step="0.01">
+      <div class="budget-acct-name">${escHtml(a.name)}</div>
+      <div class="budget-ctrl">
+        <select class="budget-type" id="btype_${a.id}" onchange="updateBudgetCalc('${a.id}')">
+          <option value="period" ${sv.type==='period'?'selected':''}>Por período</option>
+          <option value="day"    ${sv.type==='day'   ?'selected':''}>Por dia</option>
+          <option value="week"   ${sv.type==='week'  ?'selected':''}>Por semana</option>
+          <option value="month"  ${sv.type==='month' ?'selected':''}>Por mês</option>
+        </select>
+        <div class="brl-wrap"><span>R$</span>
+          <input type="number" class="budget-input" id="budget_${a.id}"
+            placeholder="0,00" min="0" step="0.01" value="${sv.value||''}"
+            oninput="updateBudgetCalc('${a.id}')">
+        </div>
+        <div class="budget-calc" id="bcalc_${a.id}"></div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+  selectedAccounts.forEach(a => updateBudgetCalc(a.id));
+}
+
+function updateBudgetCalc(id) {
+  const type=document.getElementById(`btype_${id}`)?.value;
+  const val =parseFloat(document.getElementById(`budget_${id}`)?.value||0);
+  const calc=document.getElementById(`bcalc_${id}`);
+  if (!calc) return;
+  const days=getPeriodDays();
+  if (!val||!days||type==='period'){calc.textContent='';scheduleSave();return;}
+  let total=val;
+  if(type==='day')  total=val*days;
+  if(type==='week') total=val*(days/7);
+  if(type==='month')total=val*(days/30);
+  calc.textContent=`= ${fmtBRL(total)} no período`;
+  scheduleSave();
 }
 
 function getBudgets() {
-  const budgets = {};
+  const b={}, days=getPeriodDays();
   selectedAccounts.forEach(a => {
-    const val = parseFloat(document.getElementById('budget_' + a.id)?.value);
-    if (val > 0) budgets[a.id] = val;
+    const val=parseFloat(document.getElementById(`budget_${a.id}`)?.value||0);
+    const type=document.getElementById(`btype_${a.id}`)?.value||'period';
+    if(!val)return;
+    let total=val;
+    if(type==='day'&&days)  total=val*days;
+    if(type==='week'&&days) total=val*(days/7);
+    if(type==='month'&&days)total=val*(days/30);
+    b[a.id]=total;
   });
-  return budgets;
+  return b;
 }
 
-// ─── API HELPERS ──────────────────────────────────────────────────────────────
-function fbApiGet(path) {
-  return new Promise((resolve, reject) => {
-    // Handle full URLs vs paths
-    if (path.startsWith('http')) {
-      fetch(path)
-        .then(r => r.json())
-        .then(data => {
-          if (data.error) reject(data.error.message);
-          else resolve(data);
-        })
-        .catch(reject);
-    } else {
-      FB.api(path, function(response) {
-        if (!response || response.error) {
-          reject(response?.error?.message || 'API error');
-        } else {
-          resolve(response);
-        }
-      });
-    }
-  });
+// ─── META API ─────────────────────────────────────────────────────────────────
+function fbGet(path) {
+  return new Promise((res,rej)=>FB.api(path,r=>{if(!r||r.error)rej(r?.error?.message||'API error');else res(r);}));
 }
-
-async function getInsights(actId, since, until, fields) {
-  try {
-    const path = `/${actId}/insights?time_range={"since":"${since}","until":"${until}"}&fields=${fields}&access_token=${accessToken}&limit=1`;
-    const data = await fbApiGet(path);
-    return data.data?.[0] || null;
-  } catch (e) {
-    return null;
-  }
+async function getInsights(actId,since,until,fields) {
+  try { const d=await fbGet(`/${actId}/insights?time_range={"since":"${since}","until":"${until}"}&fields=${fields}&limit=1&access_token=${accessToken}`); return d.data?.[0]||null; } catch(e){return null;}
 }
-
 async function getCampaigns(actId) {
-  try {
-    const path = `/${actId}/campaigns?fields=id,name,status,effective_status&limit=100&access_token=${accessToken}`;
-    const data = await fbApiGet(path);
-    return data.data || [];
-  } catch (e) {
-    return [];
-  }
+  try { const d=await fbGet(`/${actId}/campaigns?fields=id,name,status,effective_status&limit=100&access_token=${accessToken}`); return d.data||[]; } catch(e){return[];}
 }
 
-// ─── DATA FETCHING ────────────────────────────────────────────────────────────
-const INSIGHT_FIELDS = 'spend,impressions,reach,clicks,ctr,actions,action_values,cost_per_action_type';
+const FIELDS='spend,impressions,reach,clicks,ctr,actions,action_values,cost_per_action_type';
 
 async function buscarDadosConta(conta) {
-  const { curStart, curEnd, prevStart, prevEnd } = config;
-  const actId = conta.act_id;
-  const today = formatDate(new Date());
-  const yesterday = formatDate(new Date(Date.now() - 86400000));
-
-  const [curInsights, prevInsights, campaigns, todayInsights, yestInsights] = await Promise.allSettled([
-    getInsights(actId, curStart, curEnd, INSIGHT_FIELDS),
-    getInsights(actId, prevStart, prevEnd, INSIGHT_FIELDS),
-    getCampaigns(actId),
-    getInsights(actId, today, today, 'spend'),
-    getInsights(actId, yesterday, yesterday, 'spend'),
+  const {curStart,curEnd,prevStart,prevEnd}=config;
+  const today=fmtD(new Date()), yest=fmtD(new Date(Date.now()-86400000));
+  const [cur,prev,campaigns,todayI,yestI]=await Promise.allSettled([
+    getInsights(conta.act_id,curStart,curEnd,FIELDS),
+    getInsights(conta.act_id,prevStart,prevEnd,FIELDS),
+    getCampaigns(conta.act_id),
+    getInsights(conta.act_id,today,today,'spend'),
+    getInsights(conta.act_id,yest,yest,'spend'),
   ]);
-
-  return {
-    conta,
-    cur: curInsights.value || {},
-    prev: prevInsights.value || {},
-    campaigns: campaigns.value || [],
-    todaySpend: parseFloat(todayInsights.value?.spend || 0),
-    yestSpend: parseFloat(yestInsights.value?.spend || 0),
-  };
+  return { conta, cur:cur.value||{}, prev:prev.value||{}, campaigns:campaigns.value||[], todaySpend:parseFloat(todayI.value?.spend||0), yestSpend:parseFloat(yestI.value?.spend||0) };
 }
 
-async function buscarEmLotes(contas, tamanhoLote = 3) {
-  const resultados = [];
-  const total = contas.length;
-
-  for (let i = 0; i < contas.length; i += tamanhoLote) {
-    const lote = contas.slice(i, i + tamanhoLote);
-    setProgress(
-      `Analisando ${Math.min(i + tamanhoLote, total)} de ${total} contas...`,
-      `Lote ${Math.floor(i / tamanhoLote) + 1} de ${Math.ceil(total / tamanhoLote)}`,
-      ((i + lote.length) / total) * 100
-    );
-
-    const promessas = lote.map(conta => buscarDadosConta(conta).catch(() => null));
-    const resultadosLote = await Promise.all(promessas);
-    resultados.push(...resultadosLote.filter(Boolean));
-
-    if (i + tamanhoLote < contas.length) {
-      await new Promise(r => setTimeout(r, 500));
-    }
+async function buscarEmLotes(contas,lote=3) {
+  const total=contas.length, results=[];
+  for(let i=0;i<contas.length;i+=lote){
+    const batch=contas.slice(i,i+lote);
+    setProgress(`Analisando ${Math.min(i+lote,total)} de ${total} contas...`,`Lote ${Math.floor(i/lote)+1} de ${Math.ceil(total/lote)}`,((i+batch.length)/total)*100);
+    const res=await Promise.all(batch.map(c=>buscarDadosConta(c).catch(()=>null)));
+    results.push(...res.filter(Boolean));
+    if(i+lote<contas.length)await new Promise(r=>setTimeout(r,500));
   }
-  return resultados;
+  return results;
 }
 
 // ─── ANALYSIS ─────────────────────────────────────────────────────────────────
-function getActionVal(actions, type) {
-  if (!actions) return 0;
-  const found = actions.find(a => a.action_type && a.action_type.includes(type));
-  return parseFloat(found?.value || 0);
+function getAV(a,t){if(!a)return 0;const f=a.find(x=>x.action_type?.includes(t));return parseFloat(f?.value||0);}
+function getAC(a,t){if(!a)return null;const f=a.find(x=>x.action_type?.includes(t));return f?parseFloat(f.value):null;}
+function detectType(cur){
+  const a=cur.actions||[];
+  if(a.some(x=>x.action_type?.includes('messaging_conversation_started')))return'mensagens';
+  if(a.some(x=>x.action_type?.includes('purchase')))return'ecommerce';
+  if(a.some(x=>x.action_type?.includes('lead')))return'leads';
+  return'trafego';
+}
+function calcVar(c,p){if(!p||p===0)return null;return((c-p)/p)*100;}
+
+function analyzeAccount(data,budgets){
+  const{conta,cur,prev,campaigns,todaySpend,yestSpend}=data;
+  const budget=budgets[conta.id]||null;
+  const cS=parseFloat(cur.spend||0),pS=parseFloat(prev.spend||0);
+  const cCl=parseFloat(cur.clicks||0),pCl=parseFloat(prev.clicks||0);
+  const cIm=parseFloat(cur.impressions||0),cCTR=parseFloat(cur.ctr||0),pCTR=parseFloat(prev.ctr||0);
+  const type=detectType(cur);
+  const active=campaigns.filter(c=>c.effective_status==='ACTIVE');
+  let mC=0,mP=0,mL='',cC=null,cP=null;
+  if(type==='mensagens'){mC=getAV(cur.actions,'messaging_conversation_started');mP=getAV(prev.actions,'messaging_conversation_started');mL='Conversas';cC=getAC(cur.cost_per_action_type,'messaging_conversation_started');cP=getAC(prev.cost_per_action_type,'messaging_conversation_started');}
+  else if(type==='ecommerce'){mC=getAV(cur.actions,'purchase');mP=getAV(prev.actions,'purchase');mL='Compras';cC=getAC(cur.cost_per_action_type,'purchase');cP=getAC(prev.cost_per_action_type,'purchase');}
+  else if(type==='leads'){mC=getAV(cur.actions,'lead');mP=getAV(prev.actions,'lead');mL='Leads';cC=getAC(cur.cost_per_action_type,'lead');cP=getAC(prev.cost_per_action_type,'lead');}
+  else{mC=cCl;mP=pCl;mL='Cliques';}
+  const mV=calcVar(mC,mP),sV=calcVar(cS,pS),bP=budget?(cS/budget)*100:null;
+  let alerts=[],priority='ok',score=1,maxDrop=0;
+  if(todaySpend===0&&active.length>0){alerts.push({level:'critico',msg:`Gasto zero hoje com ${active.length} campanha(s) ativa(s)`});priority='critico';score=3;}
+  if(mV!==null&&mV<-40){alerts.push({level:'critico',msg:`Queda crítica de ${mL.toLowerCase()}: ${fmtPct(mV)}`});priority='critico';score=3;maxDrop=Math.abs(mV);}
+  else if(mV!==null&&mV<-15){alerts.push({level:'atencao',msg:`Queda em ${mL.toLowerCase()}: ${fmtPct(mV)}`});if(score<2){priority='atencao';score=2;}maxDrop=Math.abs(mV);}
+  if(bP!==null){if(bP>120){alerts.push({level:'critico',msg:`Gasto acima de 120% do orçamento (${bP.toFixed(1)}%)`});priority='critico';score=3;}else if(bP<60){alerts.push({level:'atencao',msg:`Gasto abaixo de 60% do orçamento (${bP.toFixed(1)}%)`});if(score<2){priority='atencao';score=2;}}}
+  if(yestSpend===0&&todaySpend>0){alerts.push({level:'atencao',msg:'Sem gasto ontem, mas com gasto hoje'});if(score<2){priority='atencao';score=2;}}
+  if(active.length===0&&campaigns.length>0){alerts.push({level:'atencao',msg:'Nenhuma campanha ativa nesta conta'});if(score<2){priority='atencao';score=2;}}
+  if(!alerts.length)alerts.push({level:'ok',msg:'Conta sem alertas no período analisado'});
+  return{conta,cur,prev,campaigns,todaySpend,yestSpend,type,priority,score,maxDrop,mC,mP,mL,mV,cS,pS,sV,cCl,pCl,cIm,cCTR,pCTR,cC,cP,budget,bP,alerts};
 }
 
-function getActionCost(costPer, type) {
-  if (!costPer) return null;
-  const found = costPer.find(a => a.action_type && a.action_type.includes(type));
-  return found ? parseFloat(found.value) : null;
+// ─── FORMAT ───────────────────────────────────────────────────────────────────
+function fmtBRL(v){return'R$ '+parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fmtNum(v){return parseFloat(v||0).toLocaleString('pt-BR');}
+function fmtPct(v){if(v===null)return'—';return(v>=0?'+':'')+v.toFixed(1)+'%';}
+function chgHtml(v){if(v===null)return'';const cls=v>=0?'up':'down',arrow=v>=0?'↑':'↓';return`<span class="chg ${cls}">${arrow} ${Math.abs(v).toFixed(1)}%</span>`;}
+function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderDashboard(analyzed){
+  analyzed.sort((a,b)=>b.score!==a.score?b.score-a.score:b.maxDrop-a.maxDrop);
+  document.getElementById('sum-total').textContent=analyzed.length;
+  document.getElementById('sum-critico').textContent=analyzed.filter(a=>a.priority==='critico').length;
+  document.getElementById('sum-atencao').textContent=analyzed.filter(a=>a.priority==='atencao').length;
+  document.getElementById('sum-ok').textContent=analyzed.filter(a=>a.priority==='ok').length;
+  const c=document.getElementById('dash-cards');
+  if(!analyzed.length){c.innerHTML='<div class="empty">Nenhuma conta analisada.</div>';return;}
+  c.innerHTML=analyzed.map((a,i)=>renderCard(a,i)).join('');
 }
 
-function detectType(cur) {
-  const actions = cur.actions || [];
-  if (actions.some(a => a.action_type && a.action_type.includes('messaging_conversation_started'))) return 'mensagens';
-  if (actions.some(a => a.action_type && a.action_type.includes('purchase'))) return 'ecommerce';
-  if (actions.some(a => a.action_type && a.action_type.includes('lead'))) return 'leads';
-  return 'trafego';
-}
-
-function calcVariacao(cur, prev) {
-  if (prev === null || prev === undefined || prev === 0) return null;
-  return ((cur - prev) / prev) * 100;
-}
-
-function analyzeAccount(data, budgets) {
-  const { conta, cur, prev, campaigns, todaySpend, yestSpend } = data;
-  const budget = budgets[conta.id] || null;
-
-  const curSpend = parseFloat(cur.spend || 0);
-  const prevSpend = parseFloat(prev.spend || 0);
-  const curClicks = parseFloat(cur.clicks || 0);
-  const prevClicks = parseFloat(prev.clicks || 0);
-  const curImpressions = parseFloat(cur.impressions || 0);
-  const curCTR = parseFloat(cur.ctr || 0);
-  const prevCTR = parseFloat(prev.ctr || 0);
-
-  const type = detectType(cur);
-  const activeCampaigns = campaigns.filter(c => c.effective_status === 'ACTIVE');
-  const hasActive = activeCampaigns.length > 0;
-
-  // Primary metric
-  let mainCur = 0, mainPrev = 0, mainLabel = '', costCur = null, costPrev = null;
-
-  if (type === 'mensagens') {
-    mainCur = getActionVal(cur.actions, 'messaging_conversation_started');
-    mainPrev = getActionVal(prev.actions, 'messaging_conversation_started');
-    mainLabel = 'Conversas';
-    costCur = getActionCost(cur.cost_per_action_type, 'messaging_conversation_started');
-    costPrev = getActionCost(prev.cost_per_action_type, 'messaging_conversation_started');
-  } else if (type === 'ecommerce') {
-    mainCur = getActionVal(cur.actions, 'purchase');
-    mainPrev = getActionVal(prev.actions, 'purchase');
-    mainLabel = 'Compras';
-    costCur = getActionCost(cur.cost_per_action_type, 'purchase');
-    costPrev = getActionCost(prev.cost_per_action_type, 'purchase');
-  } else if (type === 'leads') {
-    mainCur = getActionVal(cur.actions, 'lead');
-    mainPrev = getActionVal(prev.actions, 'lead');
-    mainLabel = 'Leads';
-    costCur = getActionCost(cur.cost_per_action_type, 'lead');
-    costPrev = getActionCost(prev.cost_per_action_type, 'lead');
-  } else {
-    mainCur = curClicks;
-    mainPrev = prevClicks;
-    mainLabel = 'Cliques';
-  }
-
-  const mainVariation = calcVariacao(mainCur, mainPrev);
-  const spendVariation = calcVariacao(curSpend, prevSpend);
-  const budgetPct = budget ? (curSpend / budget) * 100 : null;
-
-  // Determine priority
-  let alerts = [];
-  let priority = 'ok';
-  let score = 1;
-  let maxDrop = 0;
-
-  // Check spend zero today
-  if (todaySpend === 0 && hasActive) {
-    alerts.push({ level: 'critico', msg: `Gasto zero hoje com ${activeCampaigns.length} campanha(s) ativa(s)` });
-    priority = 'critico';
-    score = 3;
-  }
-
-  // Check main metric drop
-  if (mainVariation !== null && mainVariation < -40) {
-    alerts.push({ level: 'critico', msg: `Queda crítica de ${mainLabel.toLowerCase()}: ${fmtPct(mainVariation)}` });
-    priority = 'critico';
-    score = 3;
-    maxDrop = Math.abs(mainVariation);
-  } else if (mainVariation !== null && mainVariation < -15) {
-    alerts.push({ level: 'atencao', msg: `Queda em ${mainLabel.toLowerCase()}: ${fmtPct(mainVariation)}` });
-    if (score < 2) { priority = 'atencao'; score = 2; }
-    maxDrop = Math.abs(mainVariation);
-  }
-
-  // Budget checks
-  if (budgetPct !== null) {
-    if (budgetPct > 120) {
-      alerts.push({ level: 'critico', msg: `Gasto acima de 120% do orçamento (${fmtPct2(budgetPct)})` });
-      priority = 'critico';
-      score = 3;
-    } else if (budgetPct < 60) {
-      alerts.push({ level: 'atencao', msg: `Gasto abaixo de 60% do orçamento (${fmtPct2(budgetPct)})` });
-      if (score < 2) { priority = 'atencao'; score = 2; }
-    }
-  }
-
-  // Yesterday zero
-  if (yestSpend === 0 && todaySpend > 0) {
-    alerts.push({ level: 'atencao', msg: 'Sem gasto ontem, mas com gasto hoje' });
-    if (score < 2) { priority = 'atencao'; score = 2; }
-  }
-
-  // No active campaigns
-  if (!hasActive && campaigns.length > 0) {
-    alerts.push({ level: 'atencao', msg: 'Nenhuma campanha ativa nesta conta' });
-    if (score < 2) { priority = 'atencao'; score = 2; }
-  }
-
-  if (alerts.length === 0) {
-    alerts.push({ level: 'ok', msg: 'Conta sem alertas críticos no período' });
-  }
-
-  return {
-    conta, cur, prev, campaigns, todaySpend, yestSpend,
-    type, priority, score, maxDrop,
-    mainCur, mainPrev, mainLabel, mainVariation,
-    curSpend, prevSpend, spendVariation,
-    curClicks, prevClicks,
-    curImpressions, curCTR, prevCTR,
-    costCur, costPrev,
-    budget, budgetPct,
-    alerts
-  };
-}
-
-// ─── FORMATTING ───────────────────────────────────────────────────────────────
-function fmtBRL(val) {
-  return 'R$ ' + parseFloat(val || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-}
-
-function fmtNum(val) {
-  return parseFloat(val || 0).toLocaleString('pt-BR');
-}
-
-function fmtPct(val) {
-  if (val === null || val === undefined) return '—';
-  const sign = val >= 0 ? '+' : '';
-  return sign + val.toFixed(1) + '%';
-}
-
-function fmtPct2(val) {
-  return val.toFixed(1) + '%';
-}
-
-function changeHtml(variation) {
-  if (variation === null) return '';
-  const cls = variation >= 0 ? 'up' : 'down';
-  const arrow = variation >= 0 ? '↑' : '↓';
-  return `<span class="metric-change ${cls}">${arrow} ${Math.abs(variation).toFixed(1)}%</span>`;
-}
-
-function escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-// ─── RENDER DASHBOARD ─────────────────────────────────────────────────────────
-function renderDashboard(analyzed) {
-  // Sort: critico first, then atencao, then ok; ties by maxDrop
-  analyzed.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return b.maxDrop - a.maxDrop;
-  });
-
-  const total = analyzed.length;
-  const critico = analyzed.filter(a => a.priority === 'critico').length;
-  const atencao = analyzed.filter(a => a.priority === 'atencao').length;
-  const ok = analyzed.filter(a => a.priority === 'ok').length;
-
-  document.getElementById('sum-total').textContent = total;
-  document.getElementById('sum-critico').textContent = critico;
-  document.getElementById('sum-atencao').textContent = atencao;
-  document.getElementById('sum-ok').textContent = ok;
-
-  const container = document.getElementById('dashboard-cards');
-
-  if (!analyzed.length) {
-    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg><p>Nenhuma conta analisada.</p></div>';
-    return;
-  }
-
-  container.innerHTML = analyzed.map((a, idx) => renderAccountCard(a, idx)).join('');
-}
-
-function renderAccountCard(a, idx) {
-  const { conta, priority, alerts, todaySpend, budget, budgetPct } = a;
-  const priorityLabel = { critico: '● CRÍTICO', atencao: '⚠ ATENÇÃO', ok: '✓ OK' };
-
-  // Metrics block
-  const metrics = [];
-
-  metrics.push(`
-    <div class="metric-item">
-      <div class="metric-label">Gasto</div>
-      <div class="metric-value">${fmtBRL(a.curSpend)}</div>
-      <div class="metric-prev">Ant: ${fmtBRL(a.prevSpend)}</div>
-      ${changeHtml(a.spendVariation)}
-    </div>
-  `);
-
-  if (a.mainLabel) {
-    metrics.push(`
-      <div class="metric-item">
-        <div class="metric-label">${escHtml(a.mainLabel)}</div>
-        <div class="metric-value">${fmtNum(a.mainCur)}</div>
-        <div class="metric-prev">Ant: ${fmtNum(a.mainPrev)}</div>
-        ${changeHtml(a.mainVariation)}
+function renderCard(a,idx){
+  const labels={critico:'● CRÍTICO',atencao:'⚠ ATENÇÃO',ok:'✓ OK'};
+  const metrics=[];
+  metrics.push(`<div class="metric"><div class="metric-lbl">Gasto</div><div class="metric-val">${fmtBRL(a.cS)}</div><div class="metric-prev">Ant: ${fmtBRL(a.pS)}</div>${chgHtml(a.sV)}</div>`);
+  if(a.mL)metrics.push(`<div class="metric"><div class="metric-lbl">${escHtml(a.mL)}</div><div class="metric-val">${fmtNum(a.mC)}</div><div class="metric-prev">Ant: ${fmtNum(a.mP)}</div>${chgHtml(a.mV)}</div>`);
+  if(a.cC!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/${escHtml(a.mL)}</div><div class="metric-val">${fmtBRL(a.cC)}</div><div class="metric-prev">Ant: ${a.cP!==null?fmtBRL(a.cP):'—'}</div>${a.cP!==null?chgHtml(calcVar(a.cC,a.cP)):''}</div>`);
+  metrics.push(`<div class="metric"><div class="metric-lbl">Impressões</div><div class="metric-val">${fmtNum(a.cIm)}</div></div>`);
+  if(a.type==='trafego')metrics.push(`<div class="metric"><div class="metric-lbl">CTR</div><div class="metric-val">${parseFloat(a.cCTR||0).toFixed(2)}%</div><div class="metric-prev">Ant: ${parseFloat(a.pCTR||0).toFixed(2)}%</div>${chgHtml(calcVar(a.cCTR,a.pCTR))}</div>`);
+  const bBar=a.budget&&a.bP!==null?`
+    <div class="bbar-sec">
+      <div class="bbar-hdr">
+        <span style="color:var(--text-muted);font-weight:500">Orçamento do período: ${fmtBRL(a.budget)}</span>
+        <span style="font-family:var(--mono);font-weight:600;color:${a.bP>120?'var(--critico)':a.bP<60?'var(--atencao)':'var(--ok)'}">${a.bP.toFixed(1)}%</span>
       </div>
-    `);
-  }
-
-  if (a.costCur !== null) {
-    metrics.push(`
-      <div class="metric-item">
-        <div class="metric-label">Custo / ${escHtml(a.mainLabel)}</div>
-        <div class="metric-value">${fmtBRL(a.costCur)}</div>
-        <div class="metric-prev">Ant: ${a.costPrev !== null ? fmtBRL(a.costPrev) : '—'}</div>
-        ${a.costPrev !== null ? changeHtml(calcVariacao(a.costCur, a.costPrev)) : ''}
-      </div>
-    `);
-  }
-
-  metrics.push(`
-    <div class="metric-item">
-      <div class="metric-label">Impressões</div>
-      <div class="metric-value">${fmtNum(a.curImpressions)}</div>
-    </div>
-  `);
-
-  if (a.type === 'trafego') {
-    metrics.push(`
-      <div class="metric-item">
-        <div class="metric-label">CTR</div>
-        <div class="metric-value">${parseFloat(a.curCTR || 0).toFixed(2)}%</div>
-        <div class="metric-prev">Ant: ${parseFloat(a.prevCTR || 0).toFixed(2)}%</div>
-        ${changeHtml(calcVariacao(a.curCTR, a.prevCTR))}
-      </div>
-    `);
-  }
-
-  // Budget bar
-  const budgetBar = budget && budgetPct !== null ? `
-    <div class="budget-bar-section">
-      <div class="budget-bar-header">
-        <span class="budget-bar-label">Orçamento: ${fmtBRL(budget)}</span>
-        <span class="budget-bar-pct ${budgetPct > 120 ? 'critico' : budgetPct < 60 ? 'atencao' : 'ok'}" style="color:${budgetPct > 120 ? 'var(--critico)' : budgetPct < 60 ? 'var(--atencao)' : 'var(--ok)'}">${fmtPct2(budgetPct)}</span>
-      </div>
-      <div class="budget-bar-track">
-        <div class="budget-bar-fill ${budgetPct > 120 ? 'critico' : budgetPct < 60 ? 'atencao' : 'ok'}" style="width:${Math.min(budgetPct, 100)}%"></div>
-      </div>
-    </div>
-  ` : '';
-
-  return `
-    <div class="account-card ${priority}" style="animation-delay:${idx * 0.04}s">
-      <div class="card-header">
-        <div class="card-header-left">
-          <div>
-            <div class="card-title">${escHtml(conta.name)}</div>
-            <div class="card-id">act_${conta.id}</div>
-          </div>
+      <div class="bbar-track"><div class="bbar-fill ${a.bP>120?'critico':a.bP<60?'atencao':'ok'}" style="width:${Math.min(a.bP,100)}%"></div></div>
+    </div>`:'';
+  return`
+    <div class="acct-card ${a.priority}" style="animation-delay:${idx*.04}s">
+      <div class="card-hdr">
+        <div style="min-width:0">
+          <div class="card-title">${escHtml(a.conta.name)}</div>
+          <div class="card-id-lbl">act_${a.conta.id}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="today-label" style="text-align:right;font-size:11px;color:var(--text-muted)">Hoje</div>
-          <div class="today-value ${todaySpend === 0 ? 'today-zero' : ''}">${fmtBRL(todaySpend)}</div>
-          <span class="priority-badge ${priority}">${priorityLabel[priority]}</span>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.4px">Hoje</div>
+            <div class="today-val ${a.todaySpend===0?'today-zero':''}">${fmtBRL(a.todaySpend)}</div>
+          </div>
+          <span class="pri-badge ${a.priority}">${labels[a.priority]}</span>
         </div>
       </div>
       <div class="card-body">
-        <div class="metrics-row">
-          ${metrics.join('')}
-        </div>
-        ${budgetBar}
-        <div class="alerts-list">
-          ${alerts.map(al => `
-            <div class="alert-item ${al.level}">
-              <div class="alert-dot"></div>
-              ${escHtml(al.msg)}
-            </div>
-          `).join('')}
-        </div>
+        <div class="metrics-row">${metrics.join('')}</div>
+        ${bBar}
+        <div class="alerts">${a.alerts.map(al=>`<div class="alert-item ${al.level}"><div class="alert-dot"></div>${escHtml(al.msg)}</div>`).join('')}</div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-// ─── MAIN GENERATE ────────────────────────────────────────────────────────────
+// ─── GENERATE ─────────────────────────────────────────────────────────────────
 async function generateRadar() {
-  const curStart = document.getElementById('cur-start')?.value;
-  const curEnd = document.getElementById('cur-end')?.value;
-  const prevStart = document.getElementById('prev-start')?.value;
-  const prevEnd = document.getElementById('prev-end')?.value;
-
-  if (!curStart || !curEnd || !prevStart || !prevEnd) {
-    alert('Preencha todos os campos de data antes de gerar o radar.');
-    return;
-  }
-
-  config = { curStart, curEnd, prevStart, prevEnd };
-
-  const budgets = getBudgets ? getBudgets() : {};
-
+  const cs=document.getElementById('cur-start')?.value, ce=document.getElementById('cur-end')?.value;
+  const ps=document.getElementById('prev-start')?.value, pe=document.getElementById('prev-end')?.value;
+  if(!cs||!ce||!ps||!pe){alert('Preencha todos os campos de data antes de gerar o radar.');return;}
+  config={curStart:cs,curEnd:ce,prevStart:ps,prevEnd:pe};
+  const budgets=getBudgets();
+  await saveProfile();
   showProgress(true);
   showState('dashboard');
-
   try {
-    const raw = await buscarEmLotes(selectedAccounts);
-    const analyzed = raw.map(d => analyzeAccount(d, budgets));
+    const raw=await buscarEmLotes(selectedAccounts);
+    const analyzed=raw.map(d=>analyzeAccount(d,budgets));
     renderDashboard(analyzed);
-
-    const label = document.getElementById('dashboard-period-label');
-    if (label) {
-      label.textContent = `Período atual: ${curStart} → ${curEnd} · Comparativo: ${prevStart} → ${prevEnd}`;
-    }
-  } catch (e) {
-    document.getElementById('dashboard-cards').innerHTML = `
-      <div class="error-banner visible">Erro ao gerar o radar: ${e.message || e}</div>
-    `;
-  } finally {
-    showProgress(false);
-  }
+    document.getElementById('dash-period').textContent=`Atual: ${cs} → ${ce}  ·  Comparativo: ${ps} → ${pe}`;
+  } catch(e) {
+    document.getElementById('dash-cards').innerHTML=`<div class="err-banner visible">Erro: ${e.message||e}</div>`;
+  } finally { showProgress(false); }
 }
 
-// ─── PROGRESS ─────────────────────────────────────────────────────────────────
-function showProgress(visible) {
-  document.getElementById('progress-overlay').classList.toggle('visible', visible);
-}
-
-function setProgress(label, sub, pct) {
-  document.getElementById('progress-label').textContent = label;
-  document.getElementById('progress-sub').textContent = sub;
-  document.getElementById('progress-bar').style.width = pct + '%';
+function showProgress(v){document.getElementById('prog-overlay').classList.toggle('visible',v);}
+function setProgress(lbl,sub,pct){
+  document.getElementById('prog-lbl').textContent=lbl;
+  document.getElementById('prog-sub').textContent=sub;
+  document.getElementById('prog-bar').style.width=pct+'%';
 }
 </script>
 </body>

@@ -513,7 +513,7 @@ function onMetaConnected() {
 async function loadProfile() {
   if (!currentUser) return null;
   try {
-    const { data } = await sb.from('radar_profiles').select('*').eq('user_id', currentUser.id).single();
+    const { data } = await sb.from('radar_profiles').select('*').eq('user_id', currentUser.id).maybeSingle();
     return data;
   } catch(e) { return null; }
 }

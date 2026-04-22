@@ -43,7 +43,7 @@
   .state.active { display: block; }
 
   /* AUTH */
-  #state-auth { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 56px); padding: 40px 24px; }
+  #state-auth { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 56px); padding: 40px 24px; }
   #state-auth.active { display: flex; }
   .auth-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 40px; max-width: 380px; width: 100%; }
   .auth-logo { width: 48px; height: 48px; background: var(--text); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
@@ -453,7 +453,7 @@ async function doSignup() {
   btn.disabled=true; btn.textContent='Criando...';
   const { data, error } = await sb.auth.signUp({ email, password: pass, options:{ data:{ name } } });
   btn.disabled=false; btn.textContent='Criar conta';
-  if (error) return showMsg(error.message);
+  if (error) { if(error.message.includes('already')) return showMsg('Este e-mail já tem uma conta. Faça login ou clique em Esqueci minha senha.'); return showMsg(error.message); }
   if (data.session) onAuthSuccess(data.user);
   else showMsg('Conta criada! Verifique seu e-mail para confirmar.','success');
 }
@@ -462,7 +462,7 @@ async function doForgot() {
   const email = document.getElementById('forgot-email').value.trim();
   if (!email) return showMsg('Digite seu e-mail.');
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
-  if (error) return showMsg(error.message);
+  if (error) { if(error.message.includes('already')) return showMsg('Este e-mail já tem uma conta. Faça login ou clique em Esqueci minha senha.'); return showMsg(error.message); }
   showMsg('Link enviado! Verifique seu e-mail.','success');
 }
 

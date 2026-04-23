@@ -123,6 +123,21 @@
   .budget-input { width: 100px; padding: 5px 8px; border: 0.5px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 12px; color: var(--text); outline: none; text-align: right; }
   .budget-input:focus { border-color: var(--text); }
   .budget-calc { font-size: 11px; color: var(--text-faint); font-family: var(--mono); min-width: 120px; }
+  .metrics-account-row { border-bottom: 0.5px solid var(--border); }
+  .metrics-account-row:last-child { border-bottom: none; }
+  .metrics-account-hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; cursor: pointer; transition: background 0.1s; gap: 12px; }
+  .metrics-account-hdr:hover { background: var(--bg); }
+  .metrics-account-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex:1; min-width:0; }
+  .metrics-sel-count { font-size: 11px; color: var(--text-faint); font-family: var(--mono); white-space: nowrap; }
+  .metrics-chevron { font-size: 11px; color: var(--text-faint); transition: transform 0.2s; flex-shrink: 0; }
+  .metrics-chevron.open { transform: rotate(180deg); }
+  .metrics-grid { padding: 12px 16px; background: var(--bg); border-top: 0.5px solid var(--border); display: none; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+  .metrics-grid.open { display: grid; }
+  .metric-chip { display: flex; align-items: center; gap: 7px; padding: 6px 10px; background: white; border: 0.5px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.1s; font-size: 12px; font-weight: 500; user-select: none; }
+  .metric-chip:hover { border-color: rgba(0,0,0,0.3); }
+  .metric-chip.on { background: var(--text); color: white; border-color: var(--text); }
+  .metric-chip-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; flex-shrink: 0; }
+  .metric-chip.on .metric-chip-dot { background: white; border-color: white; }
 
   .progress-overlay { display: none; position: fixed; inset: 0; background: rgba(248,248,246,.92); z-index: 200; flex-direction: column; align-items: center; justify-content: center; }
   .progress-overlay.visible { display: flex; }
@@ -348,6 +363,15 @@
         <div class="budgets-hdr"><h3>Orçamentos esperados</h3><span class="badge-opt">opcional</span></div>
         <div id="budgets-list"></div>
       </div>
+
+      <div class="budgets-section">
+        <div class="budgets-hdr"><h3>Métricas por conta</h3><span class="badge-opt">opcional</span></div>
+        <div style="padding:10px 16px;background:var(--bg);border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-muted)">
+          Selecione quais métricas deseja acompanhar para cada conta. Deixe em branco para usar a detecção automática.
+        </div>
+        <div id="metrics-list"></div>
+      </div>
+
       <div style="display:flex;justify-content:space-between;align-items:center">
         <button class="btn btn-secondary" onclick="goToAccounts()">← Voltar</button>
         <button class="btn btn-primary" onclick="generateRadar()">Gerar Radar →</button>
@@ -533,6 +557,7 @@ async function saveProfile() {
     user_id: currentUser.id,
     selected_accounts: [...selectedIds],
     budgets,
+    metrics: Object.fromEntries(Object.entries(accountMetrics).map(([k,v])=>[k,[...v]])),
     config: {
       curStart:  document.getElementById('cur-start')?.value  || '',
       curEnd:    document.getElementById('cur-end')?.value    || '',
@@ -569,6 +594,7 @@ async function loadAccounts() {
     if (profile) {
       if (profile.selected_accounts?.length) selectedIds = new Set(profile.selected_accounts);
       if (profile.budgets) savedBudgets = profile.budgets;
+      if (profile.metrics) { Object.entries(profile.metrics).forEach(([k,v]) => { accountMetrics[k] = new Set(v); }); }
       if (profile.config) {
         const c = profile.config;
         if (c.curStart)  document.getElementById('cur-start').value  = c.curStart;
@@ -659,6 +685,7 @@ function goToConfig() {
   selectedAccounts = allAccounts.filter(a => selectedIds.has(a.id));
   if (!selectedAccounts.length) return;
   buildBudgetFields();
+  buildMetricsFields();
   showState('config');
 }
 
@@ -795,6 +822,72 @@ function getBudgets() {
   return b;
 }
 
+
+// ─── METRICS ──────────────────────────────────────────────────────────────────
+const ALL_METRICS = [
+  { id: "msg_started",   label: "Conversas iniciadas",           field: "messaging_conversation_started" },
+  { id: "cost_msg",      label: "Custo por conversa",            field: "cost_msg" },
+  { id: "leads",         label: "Leads",                         field: "lead" },
+  { id: "cost_lead",     label: "Custo por lead",                field: "cost_lead" },
+  { id: "purchases",     label: "Compras",                       field: "purchase" },
+  { id: "purchase_val",  label: "Valor de conversão",            field: "purchase_value" },
+  { id: "cost_purchase", label: "Custo por compra",              field: "cost_purchase" },
+  { id: "link_clicks",   label: "Cliques no link",               field: "link_click" },
+  { id: "cpc",           label: "CPC (custo por clique)",        field: "cpc" },
+  { id: "reach",         label: "Alcance",                       field: "reach" },
+  { id: "cpm",           label: "CPM",                           field: "cpm" },
+  { id: "video_views",   label: "Visualizações de vídeo",        field: "video_view" },
+  { id: "cost_video",    label: "Custo por visualização",        field: "cost_video" },
+  { id: "ig_profile",    label: "Visitas ao perfil do Instagram", field: "ig_profile_visit" },
+  { id: "ig_follow",     label: "Seguidores no Instagram",       field: "ig_follow" },
+];
+
+let accountMetrics = {}; // { accountId: Set of metric ids }
+
+function buildMetricsFields() {
+  const container = document.getElementById("metrics-list");
+  if (!container) return;
+  container.innerHTML = selectedAccounts.map(a => {
+    const saved = savedBudgets["_metrics_"+a.id] || [];
+    accountMetrics[a.id] = new Set(saved);
+    return `
+<div class="metrics-account-row">
+  <div class="metrics-account-hdr" onclick="toggleMetricsPanel('${a.id}')">
+    <span class="metrics-account-title">${escHtml(a.name)}</span>
+    <span class="metrics-sel-count" id="mcount_${a.id}">${saved.length ? saved.length+" métricas" : "detecção automática"}</span>
+    <span class="metrics-chevron" id="mchev_${a.id}">▼</span>
+  </div>
+  <div class="metrics-grid" id="mgrid_${a.id}">
+    ${ALL_METRICS.map(m => `
+<div class="metric-chip ${saved.includes(m.id)?'on':''}" id="mchip_${a.id}_${m.id}" onclick="toggleMetric('${a.id}','${m.id}')">
+  <div class="metric-chip-dot"></div>${escHtml(m.label)}
+</div>`).join("")}
+  </div>
+</div>`;
+  }).join("");
+}
+
+function toggleMetricsPanel(id) {
+  const grid = document.getElementById("mgrid_"+id);
+  const chev = document.getElementById("mchev_"+id);
+  grid.classList.toggle("open");
+  chev.classList.toggle("open");
+}
+
+function toggleMetric(accountId, metricId) {
+  if (!accountMetrics[accountId]) accountMetrics[accountId] = new Set();
+  const s = accountMetrics[accountId];
+  if (s.has(metricId)) s.delete(metricId); else s.add(metricId);
+  const chip = document.getElementById(`mchip_${accountId}_${metricId}`);
+  if (chip) chip.classList.toggle("on", s.has(metricId));
+  const count = document.getElementById("mcount_"+accountId);
+  if (count) count.textContent = s.size ? s.size+" métrica(s)" : "detecção automática";
+  scheduleSave();
+}
+
+function getAccountMetrics(accountId) {
+  return accountMetrics[accountId] ? [...accountMetrics[accountId]] : [];
+}
 // ─── META API ─────────────────────────────────────────────────────────────────
 function fbGet(path) {
   return new Promise((res,rej)=>FB.api(path,r=>{if(!r||r.error)rej(r?.error?.message||'API error');else res(r);}));
@@ -847,6 +940,7 @@ function calcVar(c,p){if(!p||p===0)return null;return((c-p)/p)*100;}
 
 function analyzeAccount(data,budgets){
   const{conta,cur,prev,campaigns,todaySpend,yestSpend}=data;
+  const selectedMetrics = getAccountMetrics(conta.id);
   const budget=budgets[conta.id]||null;
   const cS=parseFloat(cur.spend||0),pS=parseFloat(prev.spend||0);
   const cCl=parseFloat(cur.clicks||0),pCl=parseFloat(prev.clicks||0);
@@ -891,12 +985,38 @@ function renderDashboard(analyzed){
 
 function renderCard(a,idx){
   const labels={critico:'● CRÍTICO',atencao:'⚠ ATENÇÃO',ok:'✓ OK'};
+  const selM = getAccountMetrics(a.conta.id);
+  const hasM = m => selM.length===0 || selM.includes(m);
   const metrics=[];
+  // Spend always shown
   metrics.push(`<div class="metric"><div class="metric-lbl">Gasto</div><div class="metric-val">${fmtBRL(a.cS)}</div><div class="metric-prev">Ant: ${fmtBRL(a.pS)}</div>${chgHtml(a.sV)}</div>`);
-  if(a.mL)metrics.push(`<div class="metric"><div class="metric-lbl">${escHtml(a.mL)}</div><div class="metric-val">${fmtNum(a.mC)}</div><div class="metric-prev">Ant: ${fmtNum(a.mP)}</div>${chgHtml(a.mV)}</div>`);
-  if(a.cC!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/${escHtml(a.mL)}</div><div class="metric-val">${fmtBRL(a.cC)}</div><div class="metric-prev">Ant: ${a.cP!==null?fmtBRL(a.cP):'—'}</div>${a.cP!==null?chgHtml(calcVar(a.cC,a.cP)):''}</div>`);
-  metrics.push(`<div class="metric"><div class="metric-lbl">Impressões</div><div class="metric-val">${fmtNum(a.cIm)}</div></div>`);
-  if(a.type==='trafego')metrics.push(`<div class="metric"><div class="metric-lbl">CTR</div><div class="metric-val">${parseFloat(a.cCTR||0).toFixed(2)}%</div><div class="metric-prev">Ant: ${parseFloat(a.pCTR||0).toFixed(2)}%</div>${chgHtml(calcVar(a.cCTR,a.pCTR))}</div>`);
+  // Auto or selected metrics
+  if(selM.length===0){
+    // Auto detection
+    if(a.mL)metrics.push(`<div class="metric"><div class="metric-lbl">${escHtml(a.mL)}</div><div class="metric-val">${fmtNum(a.mC)}</div><div class="metric-prev">Ant: ${fmtNum(a.mP)}</div>${chgHtml(a.mV)}</div>`);
+    if(a.cC!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/${escHtml(a.mL)}</div><div class="metric-val">${fmtBRL(a.cC)}</div><div class="metric-prev">Ant: ${a.cP!==null?fmtBRL(a.cP):'—'}</div>${a.cP!==null?chgHtml(calcVar(a.cC,a.cP)):''}</div>`);
+    metrics.push(`<div class="metric"><div class="metric-lbl">Impressões</div><div class="metric-val">${fmtNum(a.cIm)}</div></div>`);
+    if(a.type==='trafego')metrics.push(`<div class="metric"><div class="metric-lbl">CTR</div><div class="metric-val">${parseFloat(a.cCTR||0).toFixed(2)}%</div><div class="metric-prev">Ant: ${parseFloat(a.pCTR||0).toFixed(2)}%</div>${chgHtml(calcVar(a.cCTR,a.pCTR))}</div>`);
+  } else {
+    // Custom selected metrics
+    const getV=(actions,type)=>{if(!actions)return 0;const f=actions.find(x=>x.action_type?.includes(type));return parseFloat(f?.value||0);};
+    const getCst=(cp,type)=>{if(!cp)return null;const f=cp.find(x=>x.action_type?.includes(type));return f?parseFloat(f.value):null;};
+    if(hasM('msg_started')){const v=getV(a.cur.actions,'messaging_conversation_started'),p=getV(a.prev.actions,'messaging_conversation_started');metrics.push(`<div class="metric"><div class="metric-lbl">Conversas iniciadas</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('cost_msg')){const v=getCst(a.cur.cost_per_action_type,'messaging_conversation_started');if(v!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/conversa</div><div class="metric-val">${fmtBRL(v)}</div></div>`);}
+    if(hasM('leads')){const v=getV(a.cur.actions,'lead'),p=getV(a.prev.actions,'lead');metrics.push(`<div class="metric"><div class="metric-lbl">Leads</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('cost_lead')){const v=getCst(a.cur.cost_per_action_type,'lead');if(v!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/lead</div><div class="metric-val">${fmtBRL(v)}</div></div>`);}
+    if(hasM('purchases')){const v=getV(a.cur.actions,'purchase'),p=getV(a.prev.actions,'purchase');metrics.push(`<div class="metric"><div class="metric-lbl">Compras</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('purchase_val')){const v=getV(a.cur.action_values,'purchase'),p=getV(a.prev.action_values,'purchase');metrics.push(`<div class="metric"><div class="metric-lbl">Valor conversão</div><div class="metric-val">${fmtBRL(v)}</div><div class="metric-prev">Ant: ${fmtBRL(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('cost_purchase')){const v=getCst(a.cur.cost_per_action_type,'purchase');if(v!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/compra</div><div class="metric-val">${fmtBRL(v)}</div></div>`);}
+    if(hasM('link_clicks')){const v=getV(a.cur.actions,'link_click'),p=getV(a.prev.actions,'link_click');metrics.push(`<div class="metric"><div class="metric-lbl">Cliques no link</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('cpc')){const v=parseFloat(a.cur.cpc||0),p=parseFloat(a.prev.cpc||0);metrics.push(`<div class="metric"><div class="metric-lbl">CPC</div><div class="metric-val">${fmtBRL(v)}</div><div class="metric-prev">Ant: ${fmtBRL(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('reach')){const v=parseFloat(a.cur.reach||0),p=parseFloat(a.prev.reach||0);metrics.push(`<div class="metric"><div class="metric-lbl">Alcance</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('cpm')){const v=parseFloat(a.cur.cpm||0),p=parseFloat(a.prev.cpm||0);metrics.push(`<div class="metric"><div class="metric-lbl">CPM</div><div class="metric-val">${fmtBRL(v)}</div><div class="metric-prev">Ant: ${fmtBRL(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('video_views')){const v=getV(a.cur.actions,'video_view'),p=getV(a.prev.actions,'video_view');metrics.push(`<div class="metric"><div class="metric-lbl">Visualizações vídeo</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('cost_video')){const v=getCst(a.cur.cost_per_action_type,'video_view');if(v!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/visualização</div><div class="metric-val">${fmtBRL(v)}</div></div>`);}
+    if(hasM('ig_profile')){const v=getV(a.cur.actions,'ig_profile_visit'),p=getV(a.prev.actions,'ig_profile_visit');metrics.push(`<div class="metric"><div class="metric-lbl">Visitas perfil IG</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('ig_follow')){const v=getV(a.cur.actions,'ig_follow'),p=getV(a.prev.actions,'ig_follow');metrics.push(`<div class="metric"><div class="metric-lbl">Seguidores IG</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+  }
   const bBar=a.budget&&a.bP!==null?`
     <div class="bbar-sec">
       <div class="bbar-hdr">

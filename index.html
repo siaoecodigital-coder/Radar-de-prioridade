@@ -494,7 +494,7 @@
               <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">▶️</td><td style="padding:7px 12px">Objeto reativado</td><td style="padding:7px 12px;color:#3b82f6">Info</td><td style="padding:7px 12px">Campanha / Conjunto / Anúncio</td></tr>
               <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">✏️</td><td style="padding:7px 12px">Objeto editado</td><td style="padding:7px 12px;color:#3b82f6">Info</td><td style="padding:7px 12px">Campanha / Conjunto / Anúncio</td></tr>
               <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">🔄</td><td style="padding:7px 12px">Outra alteração (tipo desconhecido)</td><td style="padding:7px 12px;color:#3b82f6">Info</td><td style="padding:7px 12px">Qualquer</td></tr>
-              <tr><td style="padding:7px 12px;color:var(--text-faint)">—</td><td style="padding:7px 12px;color:var(--text-faint)">Pausar campanha/conjunto/anúncio</td><td style="padding:7px 12px;color:var(--text-faint)">Ignorado</td><td style="padding:7px 12px;color:var(--text-faint)">Não gera notificação</td></tr>
+              <tr><td style="padding:7px 12px">⏸️</td><td style="padding:7px 12px">Objeto pausado</td><td style="padding:7px 12px;color:var(--atencao)">Atenção</td><td style="padding:7px 12px">Campanha / Conjunto / Anúncio</td></tr>
             </tbody>
           </table>
         </div>
@@ -1341,10 +1341,6 @@ const fiscalizador={
   processActivity(act,acct){
     const eType=act.event_type||'';
     if(!eType)return;
-    // Skip: pausing events (user requested no alert)
-    const isPause = eType.includes('inactive_')||eType.includes('paused_')||
-                    eType==='inactive_campaign'||eType==='inactive_ad_set'||eType==='inactive_ad';
-    if(isPause)return;
 
     let extra={};
     if(act.extra_data){
@@ -1377,6 +1373,8 @@ const fiscalizador={
       }else{
         what=`${label} alterado`;
       }
+    }else if(hasMatch(eType,['inactive_','paused_'])||eType==='inactive_campaign'||eType==='inactive_ad_set'||eType==='inactive_ad'){
+      level='atencao'; icon='⏸️'; what='Pausado(a)';
     }else if(hasMatch(eType,['delete_','deleted_'])){
       level='atencao'; icon='🗑️'; what='Excluído(a)';
     }else if(hasMatch(eType,['create_','created_'])){

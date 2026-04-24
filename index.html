@@ -685,14 +685,13 @@ async function saveProfile() {
     user_id: currentUser.id,
     selected_accounts: [...selectedIds],
     budgets,
-    metrics: Object.fromEntries(Object.entries(accountMetrics).map(([k,v])=>[k,[...v]])),
     config: {
       curStart:  document.getElementById('cur-start')?.value  || '',
       curEnd:    document.getElementById('cur-end')?.value    || '',
       prevStart: document.getElementById('prev-start')?.value || '',
       prevEnd:   document.getElementById('prev-end')?.value   || '',
+      metrics: Object.fromEntries(Object.entries(accountMetrics).map(([k,v])=>[k,[...v]])),
     },
-    updated_at: new Date().toISOString()
   };
 
   const { data: existing } = await sb.from('radar_profiles').select('user_id').eq('user_id', currentUser.id).maybeSingle();
@@ -724,13 +723,13 @@ async function loadAccounts() {
     if (profile) {
       if (profile.selected_accounts?.length) selectedIds = new Set(profile.selected_accounts);
       if (profile.budgets) savedBudgets = profile.budgets;
-      if (profile.metrics) { Object.entries(profile.metrics).forEach(([k,v]) => { accountMetrics[k] = new Set(v); }); }
       if (profile.config) {
         const c = profile.config;
         if (c.curStart)  document.getElementById('cur-start').value  = c.curStart;
         if (c.curEnd)    document.getElementById('cur-end').value    = c.curEnd;
         if (c.prevStart) document.getElementById('prev-start').value = c.prevStart;
         if (c.prevEnd)   document.getElementById('prev-end').value   = c.prevEnd;
+        if (c.metrics)   Object.entries(c.metrics).forEach(([k,v]) => { accountMetrics[k] = new Set(v); });
       }
     }
 

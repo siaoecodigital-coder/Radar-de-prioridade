@@ -1328,7 +1328,7 @@ const fiscalizador={
     const accounts=selectedAccounts;
     for(let i=0;i<accounts.length;i++){
       if(!this.running)return;
-      try{ await this.pollAccount(accounts[i]); }catch(e){}
+      try{ await this.pollAccount(accounts[i]); }catch(e){ console.warn('[Fiscalizador] Erro na conta',accounts[i].act_id,e); }
       if(i<accounts.length-1&&this.running)await sleep(1200);
     }
     updateFiscUI();
@@ -1338,9 +1338,11 @@ const fiscalizador={
   async pollAccount(acct){
     const actId=acct.act_id;
     const since=this.lastPollTs[actId]||(Math.floor(Date.now()/1000)-60);
-    const res=await fbGet(`/${actId}/activities?fields=event_time,event_type,translated_event_type,object_id,object_name,extra_data&since=${since}&limit=50&access_token=${accessToken}`);
+    const res=await fbGet(`/${actId}/activities?fields=event_time,event_type,translated_event_type,object_id,object_name,extra_data&since=${since}&limit=100&access_token=${accessToken}`);
     this.lastPollTs[actId]=Math.floor(Date.now()/1000);
     const acts=(res.data||[]).reverse();
+    if(acts.length>0) console.log('[Fiscalizador]',actId, acts.length,'evento(s):', acts.map(a=>a.event_type));
+    else console.log('[Fiscalizador]',actId,'sem eventos desde',new Date(since*1000).toLocaleTimeString('pt-BR'));
     for(const act of acts)this.processActivity(act,acct);
   },
 

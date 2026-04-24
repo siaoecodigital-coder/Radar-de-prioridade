@@ -466,6 +466,7 @@
             <option value="60000">1 min</option>
             <option value="120000">2 min</option>
           </select>
+          <button class="btn btn-secondary" onclick="fiscalizador.clearLog()" style="font-size:11px;padding:5px 10px" title="Limpar histórico do dia">Limpar</button>
           <button class="btn btn-primary" id="btn-fisc-toggle" onclick="toggleFiscalizador()">Iniciar</button>
         </div>
       </div>
@@ -892,7 +893,8 @@ function getPeriodDays() {
 function buildBudgetFields() {
   document.getElementById('budgets-list').innerHTML = selectedAccounts.map(a => {
     const sv = savedBudgets[a.id]||{};
-    const savedM = savedBudgets['_metrics_'+a.id]||[];
+    const existing = accountMetrics[a.id];
+    const savedM = (existing && existing.size>0) ? [...existing] : (savedBudgets['_metrics_'+a.id]||[]);
     accountMetrics[a.id] = new Set(savedM);
     const mCount = savedM.length;
     return `
@@ -983,7 +985,8 @@ function buildMetricsFields() {
   const container = document.getElementById("metrics-list");
   if (!container) return;
   container.innerHTML = selectedAccounts.map(a => {
-    const saved = savedBudgets["_metrics_"+a.id] || [];
+    const existing = accountMetrics[a.id];
+    const saved = (existing && existing.size>0) ? [...existing] : (savedBudgets["_metrics_"+a.id]||[]);
     accountMetrics[a.id] = new Set(saved);
     return `
 <div class="metrics-account-row">
@@ -1216,20 +1219,87 @@ function setProgress(lbl,sub,pct){
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 const fiscalizador={
-  running:false, timer:null, pollInterval:30000,
+  running:false, timer:null, _resetTimer:null, pollInterval:30000,
   events:[], lastPollTs:{}, lastPoll:null,
 
   setInterval(ms){ this.pollInterval=ms; },
 
+  _dayKey(){ return 'radar_fisc_'+new Date().toISOString().slice(0,10); },
+  _loadLog(){
+    try{
+      const s=JSON.parse(localStorage.getItem(this._dayKey())||'null');
+      if(s&&Array.isArray(s.events)) return s.events.map(e=>({...e,ts:new Date(e.ts)}));
+    }catch(e){}
+    return [];
+  },
+  _saveLog(){
+    try{
+      localStorage.setItem(this._dayKey(),JSON.stringify({
+        events:this.events.map(e=>({...e,ts:e.ts instanceof Date?e.ts.toISOString():e.ts}))
+      }));
+    }catch(e){}
+  },
+  _clearLog(){ try{localStorage.removeItem(this._dayKey());}catch(e){} },
+  _scheduleReset(){
+    if(this._resetTimer)clearTimeout(this._resetTimer);
+    const now=new Date(), h=now.getHours(), m=now.getMinutes(), s=now.getSeconds();
+    if(h>=22)return;
+    const msTo22=((22-h)*3600-(m*60+s))*1000;
+    this._resetTimer=setTimeout(()=>{
+      this.events=[];
+      this._clearLog();
+      const feed=document.getElementById('fisc-feed');
+      if(feed)feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Histórico do dia resetado às 22h.<br>Inicie o monitoramento amanhã a partir das 8h.</div>';
+      updateFiscBadge();
+    }, msTo22);
+  },
+
+  _restoreFeed(){
+    const h=new Date().getHours();
+    if(h>=22){this._clearLog();return;}
+    if(this.events.length>0)return;
+    const stored=this._loadLog();
+    if(!stored.length)return;
+    this.events=stored;
+    const feed=document.getElementById('fisc-feed');
+    if(!feed)return;
+    feed.innerHTML='';
+    [...stored].reverse().forEach(e=>prependFiscEvent(e));
+    updateFiscBadge();
+  },
+
+  clearLog(){
+    this.events=[];
+    this._clearLog();
+    const feed=document.getElementById('fisc-feed');
+    if(feed)feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Histórico limpo. Novas alterações aparecerão aqui.</div>';
+    updateFiscBadge();
+  },
+
   start(){
     if(this.running)return;
     this.running=true;
-    this.events=[];
-    const feed=document.getElementById('fisc-feed');
-    feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
+    const h=new Date().getHours();
+    if(h>=22){
+      this._clearLog(); this.events=[];
+      const feed=document.getElementById('fisc-feed');
+      feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
+    } else {
+      const stored=this._loadLog();
+      this.events=stored;
+      const feed=document.getElementById('fisc-feed');
+      if(stored.length>0){
+        feed.innerHTML='';
+        [...stored].reverse().forEach(e=>prependFiscEvent(e));
+        updateFiscBadge();
+      } else {
+        feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
+      }
+    }
     const now=Math.floor(Date.now()/1000);
     selectedAccounts.forEach(a=>{this.lastPollTs[a.act_id]=now;});
     updateFiscUI();
+    this._scheduleReset();
     this.scheduleNext(5000);
   },
 
@@ -1326,6 +1396,7 @@ const fiscalizador={
     if(this.events.length>300)this.events.pop();
     prependFiscEvent(evt);
     updateFiscBadge();
+    this._saveLog();
   }
 };
 
@@ -1341,6 +1412,7 @@ function switchDashTab(tab){
   document.querySelectorAll('.dash-panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('dtab-'+tab).classList.add('active');
   document.getElementById('dpanel-'+tab).classList.add('active');
+  if(tab==='fisc'&&!fiscalizador.running) fiscalizador._restoreFeed();
 }
 
 function updateFiscUI(){

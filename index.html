@@ -308,6 +308,13 @@
       <div class="auth-divider">―</div>
       <div style="text-align:center"><button class="btn-link" onclick="switchTab('login')">← Voltar ao login</button></div>
     </div>
+
+    <div id="form-newpass" style="display:none">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Defina sua nova senha para continuar.</p>
+      <div class="form-group"><label>Nova senha</label><input type="password" class="form-input" id="newpass-password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="form-group"><label>Confirmar nova senha</label><input type="password" class="form-input" id="newpass-confirm" placeholder="Repita a senha" onkeydown="if(event.key==='Enter')doNewPassword()"></div>
+      <button class="btn btn-primary btn-full" id="btn-newpass" onclick="doNewPassword()">Salvar nova senha</button>
+    </div>
   </div>
 </div>
 
@@ -468,6 +475,29 @@
           Clique em <strong>Iniciar</strong> para monitorar as contas selecionadas em tempo real.
         </div>
       </div>
+
+      <details style="margin-top:16px">
+        <summary style="font-size:12px;font-weight:500;color:var(--text-muted);cursor:pointer;user-select:none;padding:8px 0">Ações monitoradas pelo Fiscalizador</summary>
+        <div style="margin-top:10px;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg);border-bottom:0.5px solid var(--border)">
+              <th style="padding:8px 12px;text-align:left;font-weight:500;color:var(--text-muted)">Ícone</th>
+              <th style="padding:8px 12px;text-align:left;font-weight:500;color:var(--text-muted)">Ação</th>
+              <th style="padding:8px 12px;text-align:left;font-weight:500;color:var(--text-muted)">Nível</th>
+              <th style="padding:8px 12px;text-align:left;font-weight:500;color:var(--text-muted)">Aplica-se a</th>
+            </tr></thead>
+            <tbody>
+              <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">⚠️</td><td style="padding:7px 12px">Orçamento alterado (diário ou total)</td><td style="padding:7px 12px;color:var(--atencao)">Atenção</td><td style="padding:7px 12px">Campanha / Conjunto</td></tr>
+              <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">🗑️</td><td style="padding:7px 12px">Objeto excluído</td><td style="padding:7px 12px;color:var(--atencao)">Atenção</td><td style="padding:7px 12px">Campanha / Conjunto / Anúncio</td></tr>
+              <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">🆕</td><td style="padding:7px 12px">Novo objeto criado</td><td style="padding:7px 12px;color:#3b82f6">Info</td><td style="padding:7px 12px">Campanha / Conjunto / Anúncio</td></tr>
+              <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">▶️</td><td style="padding:7px 12px">Objeto reativado</td><td style="padding:7px 12px;color:#3b82f6">Info</td><td style="padding:7px 12px">Campanha / Conjunto / Anúncio</td></tr>
+              <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">✏️</td><td style="padding:7px 12px">Objeto editado</td><td style="padding:7px 12px;color:#3b82f6">Info</td><td style="padding:7px 12px">Campanha / Conjunto / Anúncio</td></tr>
+              <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:7px 12px">🔄</td><td style="padding:7px 12px">Outra alteração (tipo desconhecido)</td><td style="padding:7px 12px;color:#3b82f6">Info</td><td style="padding:7px 12px">Qualquer</td></tr>
+              <tr><td style="padding:7px 12px;color:var(--text-faint)">—</td><td style="padding:7px 12px;color:var(--text-faint)">Pausar campanha/conjunto/anúncio</td><td style="padding:7px 12px;color:var(--text-faint)">Ignorado</td><td style="padding:7px 12px;color:var(--text-faint)">Não gera notificação</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
     </div>
   </main>
 </div>
@@ -512,9 +542,11 @@ window.fbAsyncInit = function() {
 
 // ─── AUTH UI ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  ['login','signup','forgot'].forEach(t => document.getElementById('form-'+t).style.display = t===tab?'block':'none');
+  ['login','signup','forgot','newpass'].forEach(t => document.getElementById('form-'+t).style.display = t===tab?'block':'none');
   document.getElementById('tab-login').classList.toggle('active', tab==='login');
   document.getElementById('tab-signup').classList.toggle('active', tab==='signup');
+  const hideTabs = tab==='forgot'||tab==='newpass';
+  document.querySelector('.auth-tabs').style.display = hideTabs ? 'none' : 'flex';
   clearMsg();
 }
 function showMsg(msg, type='error') {
@@ -559,6 +591,22 @@ async function doForgot() {
   showMsg('Link enviado! Verifique seu e-mail.','success');
 }
 
+async function doNewPassword() {
+  const pass    = document.getElementById('newpass-password').value;
+  const confirm = document.getElementById('newpass-confirm').value;
+  if (!pass || pass.length < 6) return showMsg('A senha deve ter pelo menos 6 caracteres.');
+  if (pass !== confirm) return showMsg('As senhas não coincidem.');
+  const btn = document.getElementById('btn-newpass');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const { error } = await sb.auth.updateUser({ password: pass });
+  btn.disabled = false; btn.textContent = 'Salvar nova senha';
+  if (error) return showMsg(error.message);
+  showMsg('Senha atualizada! Entrando...', 'success');
+  setTimeout(() => {
+    sb.auth.getSession().then(({ data: { session } }) => { if (session) onAuthSuccess(session.user); });
+  }, 1200);
+}
+
 async function handleLogout() {
   await sb.auth.signOut();
   try { FB.logout(()=>{}); } catch(e){}
@@ -582,7 +630,12 @@ function onAuthSuccess(user) {
 // Session on load
 sb.auth.getSession().then(({ data: { session } }) => { if (session) onAuthSuccess(session.user); });
 sb.auth.onAuthStateChange((event) => {
-  if (event==='PASSWORD_RECOVERY') { showState('auth'); switchTab('login'); showMsg('Você pode entrar agora com sua nova senha.','success'); }
+  if (event==='PASSWORD_RECOVERY') {
+    showState('auth');
+    document.querySelector('.auth-tabs').style.display = 'none';
+    ['login','signup','forgot','newpass'].forEach(t => document.getElementById('form-'+t).style.display = t==='newpass'?'block':'none');
+    clearMsg();
+  }
 });
 
 // ─── META ─────────────────────────────────────────────────────────────────────
@@ -1219,7 +1272,9 @@ const fiscalizador={
     const eType=act.event_type||'';
     if(!eType)return;
     // Skip: pausing events (user requested no alert)
-    if(eType==='inactive_campaign'||eType==='inactive_ad_set'||eType==='inactive_ad')return;
+    const isPause = eType.includes('inactive_')||eType.includes('paused_')||
+                    eType==='inactive_campaign'||eType==='inactive_ad_set'||eType==='inactive_ad';
+    if(isPause)return;
 
     let extra={};
     if(act.extra_data){
@@ -1232,12 +1287,13 @@ const fiscalizador={
     let entity='Objeto';
     if(eType.includes('campaign'))entity='Campanha';
     else if(eType.includes('ad_set')||eType.includes('adset'))entity='Conjunto';
-    else if(eType.endsWith('_ad'))entity='Anúncio';
+    else if(/(_ad$|^ad_|^ad$)/.test(eType)||eType.endsWith('_ad'))entity='Anúncio';
 
     let level='info', icon='🔄', what=act.translated_event_type||eType;
 
     // Budget changes → atencao
     const db=extra.daily_budget, lb=extra.lifetime_budget;
+    const hasMatch = (s, prefixes) => prefixes.some(p => s.startsWith(p));
     if(db||lb){
       level='atencao'; icon='⚠️';
       const field=db||lb;
@@ -1251,14 +1307,14 @@ const fiscalizador={
       }else{
         what=`${label} alterado`;
       }
-    }else if(eType.startsWith('active_')){
-      icon='▶️'; what='Reativado(a)';
-    }else if(eType.startsWith('create_')){
-      icon='🆕'; what='Criado(a)';
-    }else if(eType.startsWith('delete_')){
+    }else if(hasMatch(eType,['delete_','deleted_'])){
       level='atencao'; icon='🗑️'; what='Excluído(a)';
-    }else if(eType.startsWith('edit_')){
-      icon='✏️';
+    }else if(hasMatch(eType,['create_','created_'])){
+      icon='🆕'; what='Criado(a)';
+    }else if(hasMatch(eType,['active_','activated_','restarted_','restart_'])){
+      icon='▶️'; what='Reativado(a)';
+    }else if(hasMatch(eType,['edit_','edited_','update_','updated_'])){
+      icon='✏️'; what=act.translated_event_type||'Editado(a)';
     }
 
     this.emit({acct,level,icon,entity,name,what});

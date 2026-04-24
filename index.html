@@ -230,16 +230,24 @@
   .fisc-interval-sel { padding:6px 10px; border:0.5px solid var(--border); border-radius:6px; font-family:var(--font); font-size:12px; color:var(--text); background:var(--bg); outline:none; cursor:pointer; }
   .fisc-feed { display:flex; flex-direction:column; gap:5px; }
   .fisc-empty { text-align:center; padding:48px 24px; color:var(--text-faint); font-size:13px; line-height:1.8; background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); }
-  .fisc-event { background:var(--surface); border:0.5px solid var(--border); border-left:3px solid var(--border); border-radius:var(--radius); padding:9px 13px; animation:slideIn .2s ease both; }
+  .fisc-event { background:var(--surface); border:0.5px solid var(--border); border-left:3px solid var(--border); border-radius:var(--radius); padding:9px 13px; }
   .fisc-event.atencao { border-left-color:var(--atencao); background:var(--atencao-bg); border-color:var(--atencao-border); }
   .fisc-event.info { border-left-color:#3b82f6; background:#eff6ff; border-color:#bfdbfe; }
-  .fisc-event-hdr { display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap; }
-  .fisc-time { font-size:10px; font-family:var(--mono); color:var(--text-faint); flex-shrink:0; }
-  .fisc-acct { font-size:11px; font-weight:600; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px; }
-  .fisc-entity-tag { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.4px; color:var(--text-faint); flex-shrink:0; }
-  .fisc-sep { color:var(--border); font-size:11px; flex-shrink:0; }
+  .fisc-event-hdr { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
+  .fisc-time { font-size:10px; font-family:var(--mono); color:var(--text-faint); }
   .fisc-body { font-size:13px; font-weight:500; color:var(--text); }
   .fisc-detail { font-size:11px; color:var(--text-muted); margin-top:1px; }
+  .fisc-group { background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .fisc-group-hdr { display:flex; align-items:center; justify-content:space-between; padding:9px 13px; background:var(--bg); border-bottom:0.5px solid var(--border); }
+  .fisc-group-name { font-size:13px; font-weight:600; color:var(--text); }
+  .fisc-group-badge { font-size:11px; font-weight:600; color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,transparent); border-radius:10px; padding:2px 8px; }
+  .fisc-entity-block { border-top:0.5px solid var(--border); }
+  .fisc-entity-hdr { display:flex; align-items:center; gap:6px; padding:5px 13px; font-size:10px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em; background:var(--bg); border-bottom:0.5px solid var(--border); }
+  .fisc-entity-badge { background:var(--border); border-radius:8px; padding:1px 6px; font-size:10px; color:var(--text-muted); }
+  .fisc-group .fisc-event { border-radius:0; border:none; border-bottom:0.5px solid var(--border); border-left:3px solid transparent; }
+  .fisc-group .fisc-event:last-child { border-bottom:none; }
+  .fisc-group .fisc-event.atencao { border-left-color:var(--atencao); }
+  .fisc-group .fisc-event.info { border-left-color:#3b82f6; }
   .btn-stop { background:var(--critico); color:white; }
   .btn-stop:hover { background:#b02020; }
 </style>
@@ -1268,10 +1276,7 @@ const fiscalizador={
     const stored=this._loadLog();
     if(!stored.length)return;
     this.events=stored;
-    const feed=document.getElementById('fisc-feed');
-    if(!feed)return;
-    feed.innerHTML='';
-    [...stored].reverse().forEach(e=>prependFiscEvent(e));
+    renderFiscFeed();
     updateFiscBadge();
   },
 
@@ -1395,9 +1400,10 @@ const fiscalizador={
       const p=prev[id];
       if(!p){ this.emit({acct,level:'info',icon:'🆕',entity,name:c.n,what:'Criado(a)'}); continue; }
       if(p.s!==c.s){
-        if(paused(c.s))       this.emit({acct,level:'atencao',icon:'⏸️',entity,name:c.n,what:'Pausado(a)'});
-        else if(c.s==='ACTIVE') this.emit({acct,level:'info',icon:'▶️',entity,name:c.n,what:'Reativado(a)'});
-        else                   this.emit({acct,level:'info',icon:'🔄',entity,name:c.n,what:'Status: '+c.s});
+        if(paused(c.s))                this.emit({acct,level:'atencao',icon:'⏸️',entity,name:c.n,what:'Pausado(a)'});
+        else if(c.s==='ACTIVE'&&paused(p.s)) this.emit({acct,level:'info',icon:'▶️',entity,name:c.n,what:'Reativado(a)'});
+        else if(c.s==='ACTIVE')        this.emit({acct,level:'info',icon:'✅',entity,name:c.n,what:'Aprovado(a)'});
+        else                           this.emit({acct,level:'info',icon:'🔄',entity,name:c.n,what:'Status: '+c.s});
       }
     }
     for(const [id,p] of Object.entries(prev)){
@@ -1445,7 +1451,7 @@ const fiscalizador={
     evt.ts=new Date();
     this.events.unshift(evt);
     if(this.events.length>300)this.events.pop();
-    prependFiscEvent(evt);
+    renderFiscFeed();
     updateFiscBadge();
     this._saveLog();
   }
@@ -1496,27 +1502,50 @@ function updateFiscBadge(){
   else badge.style.display='none';
 }
 
-function prependFiscEvent(evt){
+function renderFiscFeed(){
   const feed=document.getElementById('fisc-feed');
   if(!feed)return;
-  const empty=document.getElementById('fisc-empty');
-  if(empty)empty.remove();
+  const events=fiscalizador.events;
+  if(!events.length){
+    feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
+    return;
+  }
+  const ENTITY_ORDER=['Campanha','Conjunto','Anúncio','Objeto'];
+  const ENTITY_LABEL={Campanha:'Campanhas',Conjunto:'Conjuntos','Anúncio':'Anúncios',Objeto:'Outros'};
+  const groups=new Map();
+  for(const evt of events){
+    if(!groups.has(evt.acct.name)) groups.set(evt.acct.name,{acct:evt.acct,entities:new Map()});
+    const g=groups.get(evt.acct.name);
+    if(!g.entities.has(evt.entity)) g.entities.set(evt.entity,[]);
+    g.entities.get(evt.entity).push(evt);
+  }
   const pad=n=>String(n).padStart(2,'0');
-  const t=evt.ts;
-  const time=`${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
-  const div=document.createElement('div');
-  div.className=`fisc-event ${evt.level}`;
-  div.innerHTML=
-    `<div class="fisc-event-hdr">`+
-      `<span class="fisc-time">${time}</span>`+
-      `<span class="fisc-sep">·</span>`+
-      `<span class="fisc-acct">${escHtml(evt.acct.name)}</span>`+
-      `<span class="fisc-sep">·</span>`+
-      `<span class="fisc-entity-tag">${escHtml(evt.entity)}</span>`+
-    `</div>`+
-    `<div class="fisc-body">${evt.icon} ${escHtml(evt.name)}</div>`+
-    `<div class="fisc-detail">${escHtml(evt.what)}</div>`;
-  feed.insertBefore(div,feed.firstChild);
+  const fmtT=t=>`${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+  let html='';
+  for(const [,{acct,entities}] of groups){
+    const total=[...entities.values()].reduce((s,a)=>s+a.length,0);
+    const sorted=[...entities.entries()].sort((a,b)=>{
+      const ia=ENTITY_ORDER.indexOf(a[0]),ib=ENTITY_ORDER.indexOf(b[0]);
+      return (ia<0?99:ia)-(ib<0?99:ib);
+    });
+    html+=`<div class="fisc-group">`;
+    html+=`<div class="fisc-group-hdr"><span class="fisc-group-name">${escHtml(acct.name)}</span><span class="fisc-group-badge">${total} evento${total!==1?'s':''}</span></div>`;
+    for(const [entity,evts] of sorted){
+      const label=ENTITY_LABEL[entity]||entity;
+      html+=`<div class="fisc-entity-block">`;
+      html+=`<div class="fisc-entity-hdr">${escHtml(label)}<span class="fisc-entity-badge">${evts.length}</span></div>`;
+      for(const evt of evts){
+        html+=`<div class="fisc-event ${evt.level}">`;
+        html+=`<div class="fisc-event-hdr"><span class="fisc-time">${fmtT(evt.ts)}</span></div>`;
+        html+=`<div class="fisc-body">${evt.icon} ${escHtml(evt.name)}</div>`;
+        html+=`<div class="fisc-detail">${escHtml(evt.what)}</div>`;
+        html+=`</div>`;
+      }
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  }
+  feed.innerHTML=html;
 }
 </script>
 </body>

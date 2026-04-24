@@ -1304,8 +1304,7 @@ const fiscalizador={
       this.events=stored;
       const feed=document.getElementById('fisc-feed');
       if(stored.length>0){
-        feed.innerHTML='';
-        [...stored].reverse().forEach(e=>prependFiscEvent(e));
+        renderFiscFeed();
         updateFiscBadge();
       } else {
         feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';

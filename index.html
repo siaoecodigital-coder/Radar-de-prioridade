@@ -1346,11 +1346,12 @@ const fiscalizador={
     const since=this.lastPollTs[actId]||(Math.floor(Date.now()/1000)-60);
     const base=`&limit=200&access_token=${accessToken}`;
 
-    // Parallel: activities (budget/edit) + campaign snapshot + adset snapshot
-    const [actR,campR,adsetR]=await Promise.allSettled([
+    // Parallel: activities (budget/create/delete) + snapshot for campaigns, adsets, ads
+    const [actR,campR,adsetR,adR]=await Promise.allSettled([
       fbGet(`/${actId}/activities?fields=event_time,event_type,translated_event_type,object_id,object_name,extra_data&since=${since}&limit=100&access_token=${accessToken}`),
       fbGet(`/${actId}/campaigns?fields=id,name,effective_status${base}`),
-      fbGet(`/${actId}/adsets?fields=id,name,effective_status${base}`)
+      fbGet(`/${actId}/adsets?fields=id,name,effective_status${base}`),
+      fbGet(`/${actId}/ads?fields=id,name,effective_status${base}`)
     ]);
     this.lastPollTs[actId]=Math.floor(Date.now()/1000);
 
@@ -1365,23 +1366,27 @@ const fiscalizador={
     // Snapshot diff — reliable status detection (pause/activate/create/delete)
     this._checkSnapshot(acct,
       campR.status==='fulfilled'?(campR.value.data||[]):null,
-      adsetR.status==='fulfilled'?(adsetR.value.data||[]):null
+      adsetR.status==='fulfilled'?(adsetR.value.data||[]):null,
+      adR.status==='fulfilled'?(adR.value.data||[]):null
     );
   },
 
-  _checkSnapshot(acct,camps,adsets){
+  _checkSnapshot(acct,camps,adsets,ads){
     const actId=acct.act_id;
     const prev=this.snapshots[actId];
     const curr={};
     if(camps) curr.c=Object.fromEntries(camps.map(o=>[o.id,{n:o.name,s:o.effective_status}]));
     if(adsets) curr.a=Object.fromEntries(adsets.map(o=>[o.id,{n:o.name,s:o.effective_status}]));
+    if(ads) curr.d=Object.fromEntries(ads.map(o=>[o.id,{n:o.name,s:o.effective_status}]));
     if(prev){
       if(curr.c&&prev.c) this._diffSnapshot(acct,prev.c,curr.c,'Campanha');
       if(curr.a&&prev.a) this._diffSnapshot(acct,prev.a,curr.a,'Conjunto');
+      if(curr.d&&prev.d) this._diffSnapshot(acct,prev.d,curr.d,'Anúncio');
     }
     if(!this.snapshots[actId]) this.snapshots[actId]={};
     if(curr.c) this.snapshots[actId].c=curr.c;
     if(curr.a) this.snapshots[actId].a=curr.a;
+    if(curr.d) this.snapshots[actId].d=curr.d;
   },
 
   _diffSnapshot(acct,prev,curr,entity){
@@ -1410,44 +1415,30 @@ const fiscalizador={
       else extra=act.extra_data;
     }
 
-    const name=act.object_name||extra.name||act.object_id||'—';
+    // Only handle budget changes; status/create/delete are handled by snapshot comparison
+    const db=extra.daily_budget, lb=extra.lifetime_budget;
+    if(!db&&!lb)return;
 
+    const name=act.object_name||extra.name||act.object_id||'—';
     let entity='Objeto';
     if(eType.includes('campaign'))entity='Campanha';
     else if(eType.includes('ad_set')||eType.includes('adset'))entity='Conjunto';
     else if(/(_ad$|^ad_|^ad$)/.test(eType)||eType.endsWith('_ad'))entity='Anúncio';
 
-    let level='info', icon='🔄', what=act.translated_event_type||eType;
-
-    // Budget changes → atencao
-    const db=extra.daily_budget, lb=extra.lifetime_budget;
-    const hasMatch = (s, prefixes) => prefixes.some(p => s.startsWith(p));
-    if(db||lb){
-      level='atencao'; icon='⚠️';
-      const field=db||lb;
-      const label=db?'Orçamento diário':'Orçamento total';
-      const oldV=Array.isArray(field)?field[0]:(field?.old_value||field?.previous||null);
-      const newV=Array.isArray(field)?field[1]:(field?.new_value||field?.current||(!Array.isArray(field)&&typeof field!=='object'?field:null));
-      if(oldV!=null&&newV!=null){
-        what=`${label}: ${fmtBRL(parseInt(oldV)/100)} → ${fmtBRL(parseInt(newV)/100)}`;
-      }else if(newV!=null){
-        what=`${label} alterado para ${fmtBRL(parseInt(newV)/100)}`;
-      }else{
-        what=`${label} alterado`;
-      }
-    }else if(hasMatch(eType,['inactive_','paused_'])||eType==='inactive_campaign'||eType==='inactive_ad_set'||eType==='inactive_ad'){
-      level='atencao'; icon='⏸️'; what='Pausado(a)';
-    }else if(hasMatch(eType,['delete_','deleted_'])){
-      level='atencao'; icon='🗑️'; what='Excluído(a)';
-    }else if(hasMatch(eType,['create_','created_'])){
-      icon='🆕'; what='Criado(a)';
-    }else if(hasMatch(eType,['active_','activated_','restarted_','restart_'])){
-      icon='▶️'; what='Reativado(a)';
-    }else if(hasMatch(eType,['edit_','edited_','update_','updated_'])){
-      icon='✏️'; what=act.translated_event_type||'Editado(a)';
+    const field=db||lb;
+    const label=db?'Orçamento diário':'Orçamento total';
+    const oldV=Array.isArray(field)?field[0]:(field?.old_value||field?.previous||null);
+    const newV=Array.isArray(field)?field[1]:(field?.new_value||field?.current||(!Array.isArray(field)&&typeof field!=='object'?field:null));
+    let what;
+    if(oldV!=null&&newV!=null){
+      what=`${label}: ${fmtBRL(parseInt(oldV)/100)} → ${fmtBRL(parseInt(newV)/100)}`;
+    }else if(newV!=null){
+      what=`${label} alterado para ${fmtBRL(parseInt(newV)/100)}`;
+    }else{
+      what=`${label} alterado`;
     }
 
-    this.emit({acct,level,icon,entity,name,what});
+    this.emit({acct,level:'atencao',icon:'⚠️',entity,name,what});
   },
 
   emit(evt){

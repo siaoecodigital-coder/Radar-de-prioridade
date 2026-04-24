@@ -695,12 +695,14 @@ async function saveProfile() {
     updated_at: new Date().toISOString()
   };
 
-  const { error } = await sb.from('radar_profiles').upsert(payload, { onConflict: 'user_id' });
-  if (!error) {
-    const el = document.getElementById('save-indicator');
-    el.classList.add('visible');
-    setTimeout(() => el.classList.remove('visible'), 2500);
-  }
+  const { data: existing } = await sb.from('radar_profiles').select('user_id').eq('user_id', currentUser.id).maybeSingle();
+  const { error } = existing
+    ? await sb.from('radar_profiles').update(payload).eq('user_id', currentUser.id)
+    : await sb.from('radar_profiles').insert(payload);
+  if (error) { console.error('[saveProfile]', error.message, error.details); return; }
+  const el = document.getElementById('save-indicator');
+  el.classList.add('visible');
+  setTimeout(() => el.classList.remove('visible'), 2500);
 }
 
 function scheduleSave() {
@@ -1328,7 +1330,11 @@ const fiscalizador={
     const accounts=selectedAccounts;
     for(let i=0;i<accounts.length;i++){
       if(!this.running)return;
-      try{ await this.pollAccount(accounts[i]); }catch(e){ console.warn('[Fiscalizador] Erro na conta',accounts[i].act_id,e); }
+      try{ await this.pollAccount(accounts[i]); }catch(e){
+        const msg=typeof e==='string'?e:(e?.message||JSON.stringify(e));
+        console.warn('[Fiscalizador] Erro na conta',accounts[i].act_id,msg);
+        this.emit({acct:accounts[i],level:'atencao',icon:'🚫',entity:'API',name:accounts[i].name,what:'Erro ao consultar atividades: '+msg});
+      }
       if(i<accounts.length-1&&this.running)await sleep(1200);
     }
     updateFiscUI();

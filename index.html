@@ -675,6 +675,11 @@ async function saveProfile() {
     const type = document.getElementById(`btype_${a.id}`)?.value||'period';
     if (val>0) budgets[a.id] = { value: val, type };
   });
+  // Sync in-memory cache immediately so buildBudgetFields() restores correctly on Reconfigurar
+  selectedAccounts.forEach(a => {
+    if (budgets[a.id]) savedBudgets[a.id] = budgets[a.id];
+    else delete savedBudgets[a.id];
+  });
 
   const payload = {
     user_id: currentUser.id,

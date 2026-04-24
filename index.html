@@ -1227,7 +1227,7 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 const fiscalizador={
   running:false, timer:null, _resetTimer:null, pollInterval:30000,
-  events:[], lastPollTs:{}, lastPoll:null,
+  events:[], lastPollTs:{}, lastPoll:null, snapshots:{},
 
   setInterval(ms){ this.pollInterval=ms; },
 
@@ -1305,6 +1305,7 @@ const fiscalizador={
     }
     const now=Math.floor(Date.now()/1000);
     selectedAccounts.forEach(a=>{this.lastPollTs[a.act_id]=now;});
+    this.snapshots={};
     updateFiscUI();
     this._scheduleReset();
     this.scheduleNext(5000);
@@ -1343,12 +1344,60 @@ const fiscalizador={
   async pollAccount(acct){
     const actId=acct.act_id;
     const since=this.lastPollTs[actId]||(Math.floor(Date.now()/1000)-60);
-    const res=await fbGet(`/${actId}/activities?fields=event_time,event_type,translated_event_type,object_id,object_name,extra_data&since=${since}&limit=100&access_token=${accessToken}`);
+    const base=`&limit=200&access_token=${accessToken}`;
+
+    // Parallel: activities (budget/edit) + campaign snapshot + adset snapshot
+    const [actR,campR,adsetR]=await Promise.allSettled([
+      fbGet(`/${actId}/activities?fields=event_time,event_type,translated_event_type,object_id,object_name,extra_data&since=${since}&limit=100&access_token=${accessToken}`),
+      fbGet(`/${actId}/campaigns?fields=id,name,effective_status${base}`),
+      fbGet(`/${actId}/adsets?fields=id,name,effective_status${base}`)
+    ]);
     this.lastPollTs[actId]=Math.floor(Date.now()/1000);
-    const acts=(res.data||[]).reverse();
-    if(acts.length>0) console.log('[Fiscalizador]',actId, acts.length,'evento(s):', acts.map(a=>a.event_type));
-    else console.log('[Fiscalizador]',actId,'sem eventos desde',new Date(since*1000).toLocaleTimeString('pt-BR'));
-    for(const act of acts)this.processActivity(act,acct);
+
+    // Activities — primarily for budget/edit events
+    if(actR.status==='fulfilled'){
+      const acts=(actR.value.data||[]).reverse();
+      if(acts.length>0) console.log('[Fiscalizador]',actId,acts.length,'evento(s):',acts.map(a=>a.event_type));
+      else console.log('[Fiscalizador]',actId,'sem eventos desde',new Date(since*1000).toLocaleTimeString('pt-BR'));
+      for(const act of acts)this.processActivity(act,acct);
+    }
+
+    // Snapshot diff — reliable status detection (pause/activate/create/delete)
+    this._checkSnapshot(acct,
+      campR.status==='fulfilled'?(campR.value.data||[]):null,
+      adsetR.status==='fulfilled'?(adsetR.value.data||[]):null
+    );
+  },
+
+  _checkSnapshot(acct,camps,adsets){
+    const actId=acct.act_id;
+    const prev=this.snapshots[actId];
+    const curr={};
+    if(camps) curr.c=Object.fromEntries(camps.map(o=>[o.id,{n:o.name,s:o.effective_status}]));
+    if(adsets) curr.a=Object.fromEntries(adsets.map(o=>[o.id,{n:o.name,s:o.effective_status}]));
+    if(prev){
+      if(curr.c&&prev.c) this._diffSnapshot(acct,prev.c,curr.c,'Campanha');
+      if(curr.a&&prev.a) this._diffSnapshot(acct,prev.a,curr.a,'Conjunto');
+    }
+    if(!this.snapshots[actId]) this.snapshots[actId]={};
+    if(curr.c) this.snapshots[actId].c=curr.c;
+    if(curr.a) this.snapshots[actId].a=curr.a;
+  },
+
+  _diffSnapshot(acct,prev,curr,entity){
+    const paused=s=>s==='PAUSED'||s==='CAMPAIGN_PAUSED'||s==='ADSET_PAUSED';
+    for(const [id,c] of Object.entries(curr)){
+      const p=prev[id];
+      if(!p){ this.emit({acct,level:'info',icon:'🆕',entity,name:c.n,what:'Criado(a)'}); continue; }
+      if(p.s!==c.s){
+        if(paused(c.s))       this.emit({acct,level:'atencao',icon:'⏸️',entity,name:c.n,what:'Pausado(a)'});
+        else if(c.s==='ACTIVE') this.emit({acct,level:'info',icon:'▶️',entity,name:c.n,what:'Reativado(a)'});
+        else                   this.emit({acct,level:'info',icon:'🔄',entity,name:c.n,what:'Status: '+c.s});
+      }
+    }
+    for(const [id,p] of Object.entries(prev)){
+      if(!curr[id]) this.emit({acct,level:'atencao',icon:'🗑️',entity,name:p.n,what:'Excluído(a)'});
+    }
   },
 
   processActivity(act,acct){

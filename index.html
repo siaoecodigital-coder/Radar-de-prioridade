@@ -602,7 +602,7 @@ async function doForgot() {
   if (!email) return showMsg('Digite seu e-mail.');
   const redirectTo = window.location.origin + window.location.pathname;
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
-  if (error) { return showMsg('Erro: ' + (error.message || error.status || JSON.stringify(error))); }
+  if (error) { return showMsg('Não foi possível enviar o link. Verifique se o e-mail está correto ou tente novamente em instantes.'); }
   showMsg('Link enviado! Verifique seu e-mail.','success');
 }
 

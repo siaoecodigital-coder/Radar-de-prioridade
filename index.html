@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Radar de Prioridade</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB5PSIuOWVtIiBmb250LXNpemU9IjkwIj7wn46vPC90ZXh0Pjwvc3ZnPg==">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -251,6 +252,7 @@
   .fisc-group .fisc-event:last-child { border-bottom:none; }
   .fisc-group .fisc-event.atencao { border-left-color:var(--atencao); }
   .fisc-group .fisc-event.info { border-left-color:#3b82f6; }
+  .fisc-catchup-notice { display:flex; align-items:center; gap:8px; padding:10px 14px; background:#fefce8; border:0.5px solid #fde68a; border-radius:var(--radius); font-size:12px; color:#92400e; font-weight:500; }
   .btn-stop { background:var(--critico); color:white; }
   .btn-stop:hover { background:#b02020; }
 </style>
@@ -1246,14 +1248,22 @@ const fiscalizador={
   _loadLog(){
     try{
       const s=JSON.parse(localStorage.getItem(this._dayKey())||'null');
-      if(s&&Array.isArray(s.events)) return s.events.map(e=>({...e,ts:new Date(e.ts)}));
+      if(s&&Array.isArray(s.events)){
+        return {
+          events:s.events.map(e=>({...e,ts:new Date(e.ts)})),
+          snapshots:s.snapshots||{},
+          lastPollTs:s.lastPollTs||{}
+        };
+      }
     }catch(e){}
-    return [];
+    return {events:[],snapshots:{},lastPollTs:{}};
   },
   _saveLog(){
     try{
       localStorage.setItem(this._dayKey(),JSON.stringify({
-        events:this.events.map(e=>({...e,ts:e.ts instanceof Date?e.ts.toISOString():e.ts}))
+        events:this.events.map(e=>({...e,ts:e.ts instanceof Date?e.ts.toISOString():e.ts})),
+        snapshots:this.snapshots,
+        lastPollTs:this.lastPollTs
       }));
     }catch(e){}
   },
@@ -1277,8 +1287,8 @@ const fiscalizador={
     if(h>=22){this._clearLog();return;}
     if(this.events.length>0)return;
     const stored=this._loadLog();
-    if(!stored.length)return;
-    this.events=stored;
+    if(!stored.events.length)return;
+    this.events=stored.events;
     renderFiscFeed();
     updateFiscBadge();
   },
@@ -1295,27 +1305,38 @@ const fiscalizador={
     if(this.running)return;
     this.running=true;
     const h=new Date().getHours();
+    const feed=document.getElementById('fisc-feed');
     if(h>=22){
-      this._clearLog(); this.events=[];
-      const feed=document.getElementById('fisc-feed');
+      this._clearLog(); this.events=[]; this.snapshots={}; this.lastPollTs={};
       feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
     } else {
       const stored=this._loadLog();
-      this.events=stored;
-      const feed=document.getElementById('fisc-feed');
-      if(stored.length>0){
-        renderFiscFeed();
-        updateFiscBadge();
+      this.events=stored.events;
+      const nowSec=Math.floor(Date.now()/1000);
+      const maxLast=Object.keys(stored.lastPollTs).length>0?Math.max(...Object.values(stored.lastPollTs)):0;
+      const gapSec=nowSec-maxLast;
+      const needsCatchup=maxLast>0&&gapSec>90;
+      if(needsCatchup){
+        this.snapshots=stored.snapshots;
+        this.lastPollTs=stored.lastPollTs;
+        if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
+        else feed.innerHTML='';
+        const label=gapSec<3600?Math.round(gapSec/60)+'min':Math.round(gapSec/3600)+'h';
+        const notice=document.createElement('div');
+        notice.id='fisc-catchup-notice';
+        notice.className='fisc-catchup-notice';
+        notice.textContent='⏮️ Verificando o que aconteceu nos últimos '+label+'...';
+        feed.prepend(notice);
       } else {
-        feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
+        this.snapshots={}; this.lastPollTs={};
+        selectedAccounts.forEach(a=>{this.lastPollTs[a.act_id]=nowSec;});
+        if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
+        else feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
       }
     }
-    const now=Math.floor(Date.now()/1000);
-    selectedAccounts.forEach(a=>{this.lastPollTs[a.act_id]=now;});
-    this.snapshots={};
     updateFiscUI();
     this._scheduleReset();
-    this.scheduleNext(5000);
+    this.scheduleNext(1000);
   },
 
   stop(){
@@ -1344,6 +1365,9 @@ const fiscalizador={
       }
       if(i<accounts.length-1&&this.running)await sleep(1200);
     }
+    const notice=document.getElementById('fisc-catchup-notice');
+    if(notice)notice.remove();
+    this._saveLog();
     updateFiscUI();
     this.scheduleNext();
   },

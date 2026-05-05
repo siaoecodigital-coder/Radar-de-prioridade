@@ -1625,7 +1625,7 @@ async function gerarResumoDia(){
   }
   const prompt='Você é um assistente de tráfego pago digital. Hoje é '+today+'. Resuma as movimentações abaixo de forma clara e profissional, como uma atualização para o gestor de tráfego. Mencione os pontos principais por conta. Seja direto. Máximo 4 parágrafos curtos. Use português do Brasil.\n\nMovimentações:\n'+evtsText;
   try{
-    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
+    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})

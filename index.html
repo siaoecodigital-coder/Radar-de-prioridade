@@ -544,7 +544,9 @@ const APP_ID        = '1651232966033761';
 const API_VERSION   = 'v19.0';
 const SUPABASE_URL  = 'https://aheucabennpukdjckmsw.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZXVjYWJlbm5wdWtkamNrbXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDY2ODMsImV4cCI6MjA4OTYyMjY4M30.SEgiAhov3bGqcMVDJKB5ypYxA_57Ffkp1-W4ZgRluqg';
-const GEMINI_KEY    = 'AIzaSyBhgaPc6h4Fep9ayqMYvweaz1RZ8-PSJ8Q';
+// Proxy do InsightFlow (Railway) — a chave Gemini fica segura no servidor, não exposta aqui
+// Preencha com a URL do InsightFlow no Railway (ex: https://insightflow-xxx.up.railway.app)
+const INSIGHTFLOW_URL = 'https://PREENCHA-URL-DO-RAILWAY-AQUI';
 
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -1637,13 +1639,13 @@ async function gerarResumoDia(){
   }
   const prompt='Você é um assistente de tráfego pago digital. Hoje é '+today+'. Resuma as movimentações abaixo de forma clara e profissional, como uma atualização para o gestor de tráfego. Mencione os pontos principais por conta. Seja direto. Máximo 4 parágrafos curtos. Use português do Brasil.\n\nMovimentações:\n'+evtsText;
   try{
-    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
+    const resp=await fetch(INSIGHTFLOW_URL+'/api/gemini',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+      body:JSON.stringify({model:'gemini-2.5-flash',contents:[{parts:[{text:prompt}]}]})
     });
     const data=await resp.json();
-    if(data.error)throw new Error(data.error.message);
+    if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
     const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'Não foi possível gerar o resumo.';
     content.textContent=text;
   }catch(e){

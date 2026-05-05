@@ -1318,6 +1318,8 @@ const fiscalizador={
 
   clearLog(){
     this.events=[];
+    this.snapshots={};   // zera snapshots para o próximo poll não recomparar com estado antigo
+    this.lastPollTs={};
     this._clearLog();
     const feed=document.getElementById('fisc-feed');
     if(feed)feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Histórico limpo. Novas alterações aparecerão aqui.</div>';
@@ -1442,6 +1444,7 @@ const fiscalizador={
     if(curr.c) this.snapshots[actId].c=curr.c;
     if(curr.a) this.snapshots[actId].a=curr.a;
     if(curr.d) this.snapshots[actId].d=curr.d;
+    this._saveLog(); // salva snapshot já atualizado para que reinícios não redetectem exclusões
   },
 
   _diffSnapshot(acct,prev,curr,entity){

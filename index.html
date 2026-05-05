@@ -1121,7 +1121,16 @@ function analyzeAccount(data,budgets){
   const type=detectType(cur);
   const active=campaigns.filter(c=>c.effective_status==='ACTIVE');
   let mC=0,mP=0,mL='',cC=null,cP=null;
-  if(type==='mensagens'){mC=getAV(cur.actions,'messaging_conversation_started');mP=getAV(prev.actions,'messaging_conversation_started');mL='Conversas';cC=getAC(cur.cost_per_action_type,'messaging_conversation_started');cP=getAC(prev.cost_per_action_type,'messaging_conversation_started');}
+  if(selectedMetrics.length>0){
+    if(selectedMetrics.includes('leads')){mC=getAV(cur.actions,'lead');mP=getAV(prev.actions,'lead');mL='Leads';cC=getAC(cur.cost_per_action_type,'lead');cP=getAC(prev.cost_per_action_type,'lead');}
+    else if(selectedMetrics.includes('purchases')){mC=getAV(cur.actions,'purchase');mP=getAV(prev.actions,'purchase');mL='Compras';cC=getAC(cur.cost_per_action_type,'purchase');cP=getAC(prev.cost_per_action_type,'purchase');}
+    else if(selectedMetrics.includes('msg_started')){mC=getAV(cur.actions,'messaging_conversation_started');mP=getAV(prev.actions,'messaging_conversation_started');mL='Conversas';cC=getAC(cur.cost_per_action_type,'messaging_conversation_started');cP=getAC(prev.cost_per_action_type,'messaging_conversation_started');}
+    else if(selectedMetrics.includes('ig_profile')){mC=getAV(cur.actions,'ig_profile_visit');mP=getAV(prev.actions,'ig_profile_visit');mL='Visitas perfil IG';}
+    else if(selectedMetrics.includes('ig_follow')){mC=getAV(cur.actions,'ig_follow')||getAV(cur.actions,'ig_profile_follow');mP=getAV(prev.actions,'ig_follow')||getAV(prev.actions,'ig_profile_follow');mL='Seguidores IG';}
+    else if(selectedMetrics.includes('link_clicks')){mC=getAV(cur.actions,'link_click');mP=getAV(prev.actions,'link_click');mL='Cliques no link';}
+    else{mC=cCl;mP=pCl;mL='Cliques';}
+  }
+  else if(type==='mensagens'){mC=getAV(cur.actions,'messaging_conversation_started');mP=getAV(prev.actions,'messaging_conversation_started');mL='Conversas';cC=getAC(cur.cost_per_action_type,'messaging_conversation_started');cP=getAC(prev.cost_per_action_type,'messaging_conversation_started');}
   else if(type==='ecommerce'){mC=getAV(cur.actions,'purchase');mP=getAV(prev.actions,'purchase');mL='Compras';cC=getAC(cur.cost_per_action_type,'purchase');cP=getAC(prev.cost_per_action_type,'purchase');}
   else if(type==='leads'){mC=getAV(cur.actions,'lead');mP=getAV(prev.actions,'lead');mL='Leads';cC=getAC(cur.cost_per_action_type,'lead');cP=getAC(prev.cost_per_action_type,'lead');}
   else{mC=cCl;mP=pCl;mL='Cliques';}
@@ -1188,8 +1197,8 @@ function renderCard(a,idx){
     if(hasM('cpm')){const v=parseFloat(a.cur.cpm||0),p=parseFloat(a.prev.cpm||0);metrics.push(`<div class="metric"><div class="metric-lbl">CPM</div><div class="metric-val">${fmtBRL(v)}</div><div class="metric-prev">Ant: ${fmtBRL(p)}</div>${chgHtmlInv(calcVar(v,p))}</div>`);}
     if(hasM('video_views')){const v=getV(a.cur.actions,'video_view'),p=getV(a.prev.actions,'video_view');metrics.push(`<div class="metric"><div class="metric-lbl">Visualizações vídeo</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
     if(hasM('cost_video')){const v=getCst(a.cur.cost_per_action_type,'video_view');if(v!==null)metrics.push(`<div class="metric"><div class="metric-lbl">Custo/visualização</div><div class="metric-val">${fmtBRL(v)}</div></div>`);}
-    if(hasM('ig_profile')){const v=getV(a.cur.actions,'ig_profile_visit'),p=getV(a.prev.actions,'ig_profile_visit');metrics.push(`<div class="metric"><div class="metric-lbl">Visitas perfil IG</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
-    if(hasM('ig_follow')){const v=getV(a.cur.actions,'ig_follow'),p=getV(a.prev.actions,'ig_follow');metrics.push(`<div class="metric"><div class="metric-lbl">Seguidores IG</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('ig_profile')){const v=getV(a.cur.actions,'ig_profile_visit')||getV(a.cur.actions,'visit_instagram_profile'),p=getV(a.prev.actions,'ig_profile_visit')||getV(a.prev.actions,'visit_instagram_profile');metrics.push(`<div class="metric"><div class="metric-lbl">Visitas perfil IG</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
+    if(hasM('ig_follow')){const v=getV(a.cur.actions,'ig_follow')||getV(a.cur.actions,'ig_profile_follow'),p=getV(a.prev.actions,'ig_follow')||getV(a.prev.actions,'ig_profile_follow');metrics.push(`<div class="metric"><div class="metric-lbl">Seguidores IG</div><div class="metric-val">${fmtNum(v)}</div><div class="metric-prev">Ant: ${fmtNum(p)}</div>${chgHtml(calcVar(v,p))}</div>`);}
   }
   const bBar=a.budget&&a.bP!==null?`
     <div class="bbar-sec">

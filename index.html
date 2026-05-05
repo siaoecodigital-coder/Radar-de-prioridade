@@ -525,13 +525,6 @@
       <button onclick="document.getElementById('fisc-summary-modal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-muted);line-height:1">×</button>
     </div>
     <div id="fisc-summary-content" style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;"></div>
-    <div id="fisc-gemini-key-row" style="display:none;margin-top:16px">
-      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Chave da API Gemini</label>
-      <div style="display:flex;gap:8px">
-        <input id="fisc-gemini-key-input" type="password" placeholder="Cole sua chave aqui..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
-        <button onclick="salvarGeminiKey()" class="btn btn-primary" style="font-size:12px;padding:7px 14px">Salvar</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -551,6 +544,7 @@ const APP_ID        = '1651232966033761';
 const API_VERSION   = 'v19.0';
 const SUPABASE_URL  = 'https://aheucabennpukdjckmsw.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZXVjYWJlbm5wdWtkamNrbXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDY2ODMsImV4cCI6MjA4OTYyMjY4M30.SEgiAhov3bGqcMVDJKB5ypYxA_57Ffkp1-W4ZgRluqg';
+const GEMINI_KEY    = 'AIzaSyBhgaPc6h4Fep9ayqMYvweaz1RZ8-PSJ8Q';
 
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -1608,26 +1602,10 @@ function renderFiscFeed(){
   feed.innerHTML=html;
 }
 
-function salvarGeminiKey(){
-  const k=document.getElementById('fisc-gemini-key-input').value.trim();
-  if(!k)return;
-  localStorage.setItem('radar_gemini_key',k);
-  document.getElementById('fisc-gemini-key-row').style.display='none';
-  gerarResumoDia();
-}
-
 async function gerarResumoDia(){
-  const key=localStorage.getItem('radar_gemini_key');
   const modal=document.getElementById('fisc-summary-modal');
   const content=document.getElementById('fisc-summary-content');
-  const keyRow=document.getElementById('fisc-gemini-key-row');
   modal.style.display='flex';
-  keyRow.style.display='none';
-  if(!key){
-    content.textContent='Configure sua chave da API Gemini para gerar o resumo.';
-    keyRow.style.display='block';
-    return;
-  }
   const events=fiscalizador.events;
   if(!events.length){
     content.textContent='Nenhuma movimentação registrada hoje ainda.';
@@ -1647,7 +1625,7 @@ async function gerarResumoDia(){
   }
   const prompt='Você é um assistente de tráfego pago digital. Hoje é '+today+'. Resuma as movimentações abaixo de forma clara e profissional, como uma atualização para o gestor de tráfego. Mencione os pontos principais por conta. Seja direto. Máximo 4 parágrafos curtos. Use português do Brasil.\n\nMovimentações:\n'+evtsText;
   try{
-    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
@@ -1658,9 +1636,6 @@ async function gerarResumoDia(){
     content.textContent=text;
   }catch(e){
     content.textContent='Erro ao gerar resumo: '+e.message;
-    if(e.message.toLowerCase().includes('key')||e.message.toLowerCase().includes('api')){
-      keyRow.style.display='block';
-    }
   }
 }
 </script>

@@ -1270,6 +1270,14 @@ const fiscalizador={
   setInterval(ms){ this.pollInterval=ms; },
 
   _dayKey(){ return 'radar_fisc_'+new Date().toISOString().slice(0,10); },
+  // Chave permanente (não diária) para exclusões já alertadas — imune a Limpar e mudança de dia
+  _deletedKey(){ return 'radar_fisc_deleted'; },
+  _jaAlertouExclusao(actId,entity,id){
+    try{ const s=JSON.parse(localStorage.getItem(this._deletedKey())||'{}'); return !!s[actId+':'+entity+':'+id]; }catch(e){ return false; }
+  },
+  _marcarExclusao(actId,entity,id){
+    try{ const s=JSON.parse(localStorage.getItem(this._deletedKey())||'{}'); s[actId+':'+entity+':'+id]=true; localStorage.setItem(this._deletedKey(),JSON.stringify(s)); }catch(e){}
+  },
   _loadLog(){
     try{
       const s=JSON.parse(localStorage.getItem(this._dayKey())||'null');
@@ -1463,8 +1471,10 @@ const fiscalizador={
     }
     for(const [id,p] of Object.entries(prev)){
       if(!curr[id]){
-        const jaRegistrado=this.events.some(e=>e.entity===entity&&e.name===p.n&&e.what==='Excluído(a)'&&e.acct?.act_id===acct.act_id);
-        if(!jaRegistrado) this.emit({acct,level:'atencao',icon:'🗑️',entity,name:p.n,what:'Excluído(a)'});
+        if(!this._jaAlertouExclusao(acct.act_id,entity,id)){
+          this.emit({acct,level:'atencao',icon:'🗑️',entity,name:p.n,what:'Excluído(a)'});
+          this._marcarExclusao(acct.act_id,entity,id);
+        }
       }
     }
   },

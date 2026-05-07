@@ -1352,7 +1352,7 @@ const fiscalizador={
       const gapSec=nowSec-maxLast;
       const needsCatchup=maxLast>0&&gapSec>90;
       if(needsCatchup){
-        this.snapshots=stored.snapshots;
+        this.snapshots={};             // nunca restaura snapshot antigo — evita falsos alertas de exclusão no primeiro diff
         this.lastPollTs=stored.lastPollTs;
         if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
         else feed.innerHTML='';

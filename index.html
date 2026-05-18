@@ -855,14 +855,15 @@ function applyPreset(type, preset, btn) {
   let s,e;
   if (preset==='today')    { s=e=new Date(t); }
   else if (preset==='yesterday') { s=new Date(t);s.setDate(s.getDate()-1);e=new Date(s); }
-  else if (preset==='last7')    { e=new Date(t);s=new Date(t);s.setDate(s.getDate()-6); }
-  else if (preset==='last30')   { e=new Date(t);s=new Date(t);s.setDate(s.getDate()-29); }
+  else if (preset==='last7')    { e=new Date(t);e.setDate(e.getDate()-1);s=new Date(t);s.setDate(s.getDate()-7); }
+  else if (preset==='last30')   { e=new Date(t);e.setDate(e.getDate()-1);s=new Date(t);s.setDate(s.getDate()-30); }
   else if (preset==='thismonth'){ s=new Date(t.getFullYear(),t.getMonth(),1);e=new Date(t); }
   else if (preset==='lastmonth'){ s=new Date(t.getFullYear(),t.getMonth()-1,1);e=new Date(t.getFullYear(),t.getMonth(),0); }
   document.getElementById(`${type}-start`).value = fmtD(s);
   document.getElementById(`${type}-end`).value   = fmtD(e);
   document.querySelectorAll(`#presets-${type} .preset-btn`).forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
+  onCurChange();
   scheduleSave();
 }
 

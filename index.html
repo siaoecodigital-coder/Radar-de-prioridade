@@ -1446,30 +1446,29 @@ const fiscalizador={
     const stored=this._loadLog();
     this.events=stored.events;
     const nowSec=Math.floor(Date.now()/1000);
-    // Calcula início do dia em segundos para catch-up
     const now=new Date();
     const startOfDay=new Date(now.getFullYear(),now.getMonth(),now.getDate());
     const startOfDaySec=Math.floor(startOfDay.getTime()/1000);
-    // Se há lastPollTs, usa o menor entre ele e início do dia (para pegar tudo desde a última parada)
     const maxLast=Object.keys(stored.lastPollTs).length>0?Math.max(...Object.values(stored.lastPollTs)):0;
-    const effectiveSince=Math.min(maxLast||nowSec,startOfDaySec);
-    // Se parou há menos de 90s, assume que foi um refresh e não zera
+    // Catch-up limitado a no máximo 2h pra não travar a API
+    const twoHoursSec=7200;
+    const catchupSince=Math.max(maxLast||nowSec, nowSec-twoHoursSec);
+    // Se a última verificação foi há mais de 90s, faz catch-up
     const needsCatchup=maxLast===0||(nowSec-maxLast)>90;
     if(needsCatchup){
-      this.snapshots={};             // nunca restaura snapshot antigo — evita falsos alertas de exclusão
-      // Define lastPollTs para o início do dia para puxar tudo de hoje
+      this.snapshots={};
       selectedAccounts.forEach(a=>{
-        this.lastPollTs[a.act_id]=effectiveSince;
+        this.lastPollTs[a.act_id]=catchupSince;
       });
       if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
       else feed.innerHTML='';
-      if(effectiveSince<nowSec-60){
-        const gapSec=nowSec-effectiveSince;
+      if(catchupSince<nowSec-60){
+        const gapSec=nowSec-catchupSince;
         const label=gapSec<3600?Math.round(gapSec/60)+'min':Math.round(gapSec/3600)+'h';
         const notice=document.createElement('div');
         notice.id='fisc-catchup-notice';
         notice.className='fisc-catchup-notice';
-        notice.textContent='⏮️ Buscando alterações desde '+new Date(effectiveSince*1000).toLocaleTimeString('pt-BR')+' ('+label+' atrás)...';
+        notice.textContent='⏮️ Buscando alterações das últimas '+label+'...';
         feed.prepend(notice);
       }
     } else {

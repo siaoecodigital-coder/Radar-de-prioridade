@@ -231,6 +231,17 @@
   .fisc-interval-sel { padding:6px 10px; border:0.5px solid var(--border); border-radius:6px; font-family:var(--font); font-size:12px; color:var(--text); background:var(--bg); outline:none; cursor:pointer; }
   .fisc-feed { display:flex; flex-direction:column; gap:5px; }
   .fisc-empty { text-align:center; padding:48px 24px; color:var(--text-faint); font-size:13px; line-height:1.8; background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); }
+  .fisc-inatividade { margin-top:12px; background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .fisc-inatividade-hdr { display:flex; align-items:center; gap:8px; padding:10px 14px; cursor:pointer; user-select:none; font-size:13px; font-weight:500; color:var(--text-muted); }
+  .fisc-inatividade-hdr:hover { background:var(--bg); }
+  .fisc-inatividade-badge { font-size:11px; font-family:var(--mono); color:var(--atencao); margin-left:auto; }
+  .fisc-inatividade-body { padding:0 14px 10px; }
+  .fisc-inatividade-body.collapsed { display:none; }
+  .fisc-inatividade-item { display:flex; align-items:center; justify-content:space-between; padding:7px 10px; border-radius:6px; font-size:12px; gap:12px; }
+  .fisc-inatividade-item:nth-child(odd) { background:var(--bg); }
+  .fisc-inatividade-item-name { font-weight:500; color:var(--text); }
+  .fisc-inatividade-item-dias { font-family:var(--mono); color:var(--atencao); white-space:nowrap; font-size:11px; }
+  .fisc-inatividade-empty { text-align:center; padding:12px; color:var(--ok); font-size:12px; }
   .fisc-event { background:var(--surface); border:0.5px solid var(--border); border-left:3px solid var(--border); border-radius:var(--radius); padding:9px 13px; }
   .fisc-event.atencao { border-left-color:var(--atencao); background:var(--atencao-bg); border-color:var(--atencao-border); }
   .fisc-event.info { border-left-color:#3b82f6; background:#eff6ff; border-color:#bfdbfe; }
@@ -479,7 +490,7 @@
             <option value="60000">1 min</option>
             <option value="120000">2 min</option>
           </select>
-          <button class="btn btn-secondary" onclick="fiscalizador.clearLog()" style="font-size:11px;padding:5px 10px" title="Limpar histórico do dia">Limpar</button>
+          <button class="btn btn-secondary" onclick="fiscalizador.clearLog()" style="font-size:11px;padding:5px 10px" title="Limpar histórico da semana">Limpar</button>
           <button class="btn btn-secondary" onclick="gerarResumoDia()" style="font-size:11px;padding:5px 10px" title="Gerar resumo do dia com IA">Resumo IA</button>
           <button class="btn btn-primary" id="btn-fisc-toggle" onclick="toggleFiscalizador()">Iniciar</button>
         </div>
@@ -489,6 +500,15 @@
           Nenhuma alteração detectada ainda.<br>
           Clique em <strong>Iniciar</strong> para monitorar as contas selecionadas em tempo real.
         </div>
+      </div>
+
+      <div class="fisc-inatividade" id="fisc-inatividade" style="display:none">
+        <div class="fisc-inatividade-hdr" onclick="toggleFiscSection(this)">
+          <span class="fisc-arrow">▼</span>
+          <span>🔕 Contas sem alterações</span>
+          <span class="fisc-inatividade-badge" id="fisc-inatividade-badge"></span>
+        </div>
+        <div class="fisc-inatividade-body" id="fisc-inatividade-body"></div>
       </div>
 
       <details style="margin-top:16px">
@@ -1265,13 +1285,41 @@ function setProgress(lbl,sub,pct){
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 const fiscalizador={
-  running:false, timer:null, _resetTimer:null, pollInterval:30000,
+  running:false, timer:null, pollInterval:30000,
   events:[], lastPollTs:{}, lastPoll:null, snapshots:{},
 
   setInterval(ms){ this.pollInterval=ms; },
 
-  _dayKey(){ return 'radar_fisc_'+new Date().toISOString().slice(0,10); },
-  // Chave permanente (não diária) para exclusões já alertadas — imune a Limpar e mudança de dia
+  // Chave semanal (segunda a domingo)
+  _weekKey(date){
+    const d=date||new Date();
+    const day=d.getDay();
+    const monday=new Date(d);
+    monday.setDate(d.getDate()-(day===0?6:day-1));
+    return 'radar_fisc_wk_'+monday.toISOString().slice(0,10);
+  },
+  // Mantém histórico das últimas 4 semanas, limpa as mais antigas
+  _cleanOldWeekKeys(){
+    try{
+      const current=this._weekKey();
+      const keys=Object.keys(localStorage).filter(k=>k.startsWith('radar_fisc_wk_')).sort();
+      // Coleta datas das chaves para calcular idade
+      const weekDates=keys.map(k=>{
+        const ds=k.replace('radar_fisc_wk_','');
+        return {key:k,date:new Date(ds+'T00:00:00')};
+      });
+      // Mantém a atual + 3 anteriores (4 semanas no total)
+      const now=new Date();
+      const fourWeeksAgo=new Date(now);
+      fourWeeksAgo.setDate(now.getDate()-28);
+      for(const wd of weekDates){
+        if(wd.date<fourWeeksAgo){
+          localStorage.removeItem(wd.key);
+        }
+      }
+    }catch(e){}
+  },
+  // Chave permanente para exclusões já alertadas e inatividade — não limpa nunca
   _deletedKey(){ return 'radar_fisc_deleted'; },
   _jaAlertouExclusao(actId,entity,id){
     try{ const s=JSON.parse(localStorage.getItem(this._deletedKey())||'{}'); return !!s[actId+':'+entity+':'+id]; }catch(e){ return false; }
@@ -1281,7 +1329,7 @@ const fiscalizador={
   },
   _loadLog(){
     try{
-      const s=JSON.parse(localStorage.getItem(this._dayKey())||'null');
+      const s=JSON.parse(localStorage.getItem(this._weekKey())||'null');
       if(s&&Array.isArray(s.events)){
         return {
           events:s.events.map(e=>({...e,ts:new Date(e.ts)})),
@@ -1294,31 +1342,82 @@ const fiscalizador={
   },
   _saveLog(){
     try{
-      localStorage.setItem(this._dayKey(),JSON.stringify({
-        events:this.events.map(e=>({...e,ts:e.ts instanceof Date?e.ts.toISOString():e.ts})),
+      // Poda: mantém no máximo 500 eventos no localStorage para não encher
+      const toSave=this.events.slice(0,500);
+      localStorage.setItem(this._weekKey(),JSON.stringify({
+        events:toSave.map(e=>({...e,ts:e.ts instanceof Date?e.ts.toISOString():e.ts})),
         snapshots:this.snapshots,
         lastPollTs:this.lastPollTs
       }));
     }catch(e){}
   },
-  _clearLog(){ try{localStorage.removeItem(this._dayKey());}catch(e){} },
-  _scheduleReset(){
-    if(this._resetTimer)clearTimeout(this._resetTimer);
-    const now=new Date(), h=now.getHours(), m=now.getMinutes(), s=now.getSeconds();
-    if(h>=22)return;
-    const msTo22=((22-h)*3600-(m*60+s))*1000;
-    this._resetTimer=setTimeout(()=>{
-      this.events=[];
-      this._clearLog();
-      const feed=document.getElementById('fisc-feed');
-      if(feed)feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Histórico do dia resetado às 22h.<br>Inicie o monitoramento amanhã a partir das 8h.</div>';
-      updateFiscBadge();
-    }, msTo22);
-  },
+  _clearLog(){ try{localStorage.removeItem(this._weekKey());}catch(e){} },
 
+  // Verifica contas selecionadas que estão há dias sem alterações detectadas
+  _checkInatividade(){
+    const accounts=selectedAccounts;
+    if(!accounts.length)return;
+    const now=new Date();
+    // Coleta todos os eventos das últimas 4 semanas (do localStorage)
+    const allEvents=[...this.events]; // eventos em memória primeiro
+    const keys=Object.keys(localStorage).filter(k=>k.startsWith('radar_fisc_wk_'));
+    for(const k of keys){
+      if(k===this._weekKey())continue; // já estão em this.events
+      try{
+        const s=JSON.parse(localStorage.getItem(k)||'null');
+        if(s&&Array.isArray(s.events)){
+          for(const e of s.events){
+            allEvents.push({...e,ts:new Date(e.ts)});
+          }
+        }
+      }catch(e){}
+    }
+    // Agrupa última data de evento por conta
+    const lastEventByAcct={};
+    for(const evt of allEvents){
+      const name=evt.acct?.name;
+      if(!name)continue;
+      if(!lastEventByAcct[name]||evt.ts>lastEventByAcct[name]){
+        lastEventByAcct[name]=evt.ts;
+      }
+    }
+    // Calcula quantos dias sem alteração para cada conta selecionada
+    const inativas=[];
+    for(const acct of accounts){
+      const last=lastEventByAcct[acct.name];
+      if(!last){
+        // Nunca teve evento registrado — conta nunca foi monitorada ou histórico foi limpo
+        inativas.push({name:acct.name,act_id:acct.act_id,dias:'?'});
+        continue;
+      }
+      const diffMs=now-last;
+      const diffDays=Math.floor(diffMs/(1000*60*60*24));
+      if(diffDays>=3){
+        inativas.push({name:acct.name,act_id:acct.act_id,dias:diffDays});
+      }
+    }
+    // Renderiza
+    const container=document.getElementById('fisc-inatividade');
+    const badge=document.getElementById('fisc-inatividade-badge');
+    const body=document.getElementById('fisc-inatividade-body');
+    if(!container||!body)return;
+    if(inativas.length===0){
+      container.style.display='none';
+      return;
+    }
+    container.style.display='block';
+    badge.textContent=inativas.length+' conta(s)';
+    // Ordena por mais tempo sem alteração
+    inativas.sort((a,b)=>b.dias===a.dias?0:(b.dias==='?'?1:a.dias==='?'?-1:b.dias-a.dias));
+    let html='';
+    for(const item of inativas){
+      const label=item.dias==='?'?'Sem dados':item.dias+'d sem alterações';
+      const cls=item.dias==='?'||item.dias>=7?'atencao':'info';
+      html+=`<div class="fisc-inatividade-item"><span class="fisc-inatividade-item-name">${escHtml(item.name)}</span><span class="fisc-inatividade-item-dias" style="color:${item.dias>=7||item.dias==='?'?'var(--atencao)':'var(--text-muted)'}">${label}</span></div>`;
+    }
+    body.innerHTML=html;
+  },
   _restoreFeed(){
-    const h=new Date().getHours();
-    if(h>=22){this._clearLog();return;}
     if(this.events.length>0)return;
     const stored=this._loadLog();
     if(!stored.events.length)return;
@@ -1332,6 +1431,7 @@ const fiscalizador={
     this.snapshots={};   // zera snapshots para o próximo poll não recomparar com estado antigo
     this.lastPollTs={};
     this._clearLog();
+    this._checkInatividade();
     const feed=document.getElementById('fisc-feed');
     if(feed)feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Histórico limpo. Novas alterações aparecerão aqui.</div>';
     updateFiscBadge();
@@ -1340,38 +1440,47 @@ const fiscalizador={
   start(){
     if(this.running)return;
     this.running=true;
-    const h=new Date().getHours();
     const feed=document.getElementById('fisc-feed');
-    if(h>=22){
-      this._clearLog(); this.events=[]; this.snapshots={}; this.lastPollTs={};
-      feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
-    } else {
-      const stored=this._loadLog();
-      this.events=stored.events;
-      const nowSec=Math.floor(Date.now()/1000);
-      const maxLast=Object.keys(stored.lastPollTs).length>0?Math.max(...Object.values(stored.lastPollTs)):0;
-      const gapSec=nowSec-maxLast;
-      const needsCatchup=maxLast>0&&gapSec>90;
-      if(needsCatchup){
-        this.snapshots={};             // nunca restaura snapshot antigo — evita falsos alertas de exclusão no primeiro diff
-        this.lastPollTs=stored.lastPollTs;
-        if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
-        else feed.innerHTML='';
+    // Limpa chaves de semanas anteriores ao iniciar
+    this._cleanOldWeekKeys();
+    const stored=this._loadLog();
+    this.events=stored.events;
+    const nowSec=Math.floor(Date.now()/1000);
+    // Calcula início do dia em segundos para catch-up
+    const now=new Date();
+    const startOfDay=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const startOfDaySec=Math.floor(startOfDay.getTime()/1000);
+    // Se há lastPollTs, usa o menor entre ele e início do dia (para pegar tudo desde a última parada)
+    const maxLast=Object.keys(stored.lastPollTs).length>0?Math.max(...Object.values(stored.lastPollTs)):0;
+    const effectiveSince=Math.min(maxLast||nowSec,startOfDaySec);
+    // Se parou há menos de 90s, assume que foi um refresh e não zera
+    const needsCatchup=maxLast===0||(nowSec-maxLast)>90;
+    if(needsCatchup){
+      this.snapshots={};             // nunca restaura snapshot antigo — evita falsos alertas de exclusão
+      // Define lastPollTs para o início do dia para puxar tudo de hoje
+      selectedAccounts.forEach(a=>{
+        this.lastPollTs[a.act_id]=effectiveSince;
+      });
+      if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
+      else feed.innerHTML='';
+      if(effectiveSince<nowSec-60){
+        const gapSec=nowSec-effectiveSince;
         const label=gapSec<3600?Math.round(gapSec/60)+'min':Math.round(gapSec/3600)+'h';
         const notice=document.createElement('div');
         notice.id='fisc-catchup-notice';
         notice.className='fisc-catchup-notice';
-        notice.textContent='⏮️ Verificando o que aconteceu nos últimos '+label+'...';
+        notice.textContent='⏮️ Buscando alterações desde '+new Date(effectiveSince*1000).toLocaleTimeString('pt-BR')+' ('+label+' atrás)...';
         feed.prepend(notice);
-      } else {
-        this.snapshots={}; this.lastPollTs={};
-        selectedAccounts.forEach(a=>{this.lastPollTs[a.act_id]=nowSec;});
-        if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
-        else feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
       }
+    } else {
+      // Retomada rápida: mantém snapshots zerados mas usa timestamps recentes
+      this.snapshots={}; this.lastPollTs={};
+      selectedAccounts.forEach(a=>{this.lastPollTs[a.act_id]=nowSec;});
+      if(this.events.length>0){renderFiscFeed();updateFiscBadge();}
+      else feed.innerHTML='<div class="fisc-empty" id="fisc-empty">Aguardando primeira verificação...</div>';
     }
     updateFiscUI();
-    this._scheduleReset();
+    this._checkInatividade();
     this.scheduleNext(1000);
   },
 
@@ -1404,6 +1513,7 @@ const fiscalizador={
     const notice=document.getElementById('fisc-catchup-notice');
     if(notice)notice.remove();
     this._saveLog();
+    this._checkInatividade();
     updateFiscUI();
     this.scheduleNext();
   },
@@ -1442,10 +1552,11 @@ const fiscalizador={
     const actId=acct.act_id;
     const prev=this.snapshots[actId];
     const curr={};
-    const notArchived=o=>o.effective_status!=='ARCHIVED';
-    if(camps) curr.c=Object.fromEntries(camps.filter(notArchived).map(o=>[o.id,{n:o.name,s:o.effective_status}]));
-    if(adsets) curr.a=Object.fromEntries(adsets.filter(notArchived).map(o=>[o.id,{n:o.name,s:o.effective_status}]));
-    if(ads) curr.d=Object.fromEntries(ads.filter(notArchived).map(o=>[o.id,{n:o.name,s:o.effective_status}]));
+    // Filtra fora ARCHIVED e DELETED — são estados terminais, não devem entrar no diff
+    const isActive=o=>o.effective_status!=='ARCHIVED'&&o.effective_status!=='DELETED';
+    if(camps) curr.c=Object.fromEntries(camps.filter(isActive).map(o=>[o.id,{n:o.name,s:o.effective_status}]));
+    if(adsets) curr.a=Object.fromEntries(adsets.filter(isActive).map(o=>[o.id,{n:o.name,s:o.effective_status}]));
+    if(ads) curr.d=Object.fromEntries(ads.filter(isActive).map(o=>[o.id,{n:o.name,s:o.effective_status}]));
     if(prev){
       if(curr.c&&prev.c) this._diffSnapshot(acct,prev.c,curr.c,'Campanha');
       if(curr.a&&prev.a) this._diffSnapshot(acct,prev.a,curr.a,'Conjunto');
@@ -1460,9 +1571,16 @@ const fiscalizador={
 
   _diffSnapshot(acct,prev,curr,entity){
     const paused=s=>s==='PAUSED'||s==='CAMPAIGN_PAUSED'||s==='ADSET_PAUSED';
+    const active=s=>!paused(s)&&s!=='ARCHIVED'&&s!=='DELETED';
     for(const [id,c] of Object.entries(curr)){
       const p=prev[id];
-      if(!p){ this.emit({acct,level:'info',icon:'🆕',entity,name:c.n,what:'Criado(a)'}); continue; }
+      if(!p){
+        // Só emite criação se o item está ativo ou pausado (ignora ARCHIVED/DELETED que aparecem transitoriamente)
+        if(c.s!=='ARCHIVED'&&c.s!=='DELETED'){
+          this.emit({acct,level:'info',icon:'🆕',entity,name:c.n,what:'Criado(a)'});
+        }
+        continue;
+      }
       if(p.s!==c.s){
         if(paused(c.s))                this.emit({acct,level:'atencao',icon:'⏸️',entity,name:c.n,what:'Pausado(a)'});
         else if(c.s==='ACTIVE'&&paused(p.s)) this.emit({acct,level:'info',icon:'▶️',entity,name:c.n,what:'Reativado(a)'});
@@ -1472,9 +1590,12 @@ const fiscalizador={
     }
     for(const [id,p] of Object.entries(prev)){
       if(!curr[id]){
-        if(!this._jaAlertouExclusao(acct.act_id,entity,id)){
-          this.emit({acct,level:'atencao',icon:'🗑️',entity,name:p.n,what:'Excluído(a)'});
-          this._marcarExclusao(acct.act_id,entity,id);
+        // Só emite exclusão se o item NÃO estava como ARCHIVED/DELETED — evita falso positivo de anúncio antigo
+        if(active(p.s)){
+          if(!this._jaAlertouExclusao(acct.act_id,entity,id)){
+            this.emit({acct,level:'atencao',icon:'🗑️',entity,name:p.n,what:'Excluído(a)'});
+            this._marcarExclusao(acct.act_id,entity,id);
+          }
         }
       }
     }

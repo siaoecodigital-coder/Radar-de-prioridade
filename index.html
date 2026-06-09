@@ -229,6 +229,9 @@
   .fisc-last-poll { font-size:11px; color:var(--text-faint); font-family:var(--mono); }
   .fisc-ctrl-right { display:flex; align-items:center; gap:8px; }
   .fisc-interval-sel { padding:6px 10px; border:0.5px solid var(--border); border-radius:6px; font-family:var(--font); font-size:12px; color:var(--text); background:var(--bg); outline:none; cursor:pointer; }
+  .fisc-semana-bar { display:flex; align-items:center; gap:8px; padding:8px 0; font-size:12px; color:var(--text-muted); }
+  .fisc-semana-label { font-weight:500; }
+  .fisc-semana-sel { padding:5px 8px; border:0.5px solid var(--border); border-radius:6px; font-family:var(--font); font-size:12px; color:var(--text); background:var(--bg); outline:none; cursor:pointer; min-width:180px; }
   .fisc-feed { display:flex; flex-direction:column; gap:5px; }
   .fisc-empty { text-align:center; padding:48px 24px; color:var(--text-faint); font-size:13px; line-height:1.8; background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); }
   .fisc-inatividade { margin-top:12px; background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); overflow:hidden; }
@@ -494,6 +497,12 @@
           <button class="btn btn-secondary" onclick="gerarResumoDia()" style="font-size:11px;padding:5px 10px" title="Gerar resumo do dia com IA">Resumo IA</button>
           <button class="btn btn-primary" id="btn-fisc-toggle" onclick="toggleFiscalizador()">Iniciar</button>
         </div>
+      </div>
+      <div class="fisc-semana-bar" id="fisc-semana-bar">
+        <span class="fisc-semana-label">Histórico:</span>
+        <select class="fisc-semana-sel" id="fisc-semana-sel" onchange="carregarSemana(this.value)">
+          <option value="0" selected>Esta semana</option>
+        </select>
       </div>
       <div class="fisc-feed" id="fisc-feed">
         <div class="fisc-empty" id="fisc-empty">
@@ -1426,6 +1435,44 @@ const fiscalizador={
     updateFiscBadge();
   },
 
+  // Popula o dropdown de semanas com as chaves disponíveis no localStorage
+  _populateWeekDropdown(){
+    const sel=document.getElementById('fisc-semana-sel');
+    if(!sel)return;
+    const current=this._weekKey();
+    const weeks=[{key:current,label:'Esta semana'}];
+    const keys=Object.keys(localStorage).filter(k=>k.startsWith('radar_fisc_wk_')&&k!==current).sort();
+    // Gera labels amigáveis a partir das datas das chaves
+    for(const k of keys){
+      const ds=k.replace('radar_fisc_wk_','');
+      const d=new Date(ds+'T00:00:00');
+      // Calcula número da semana ou label relativa
+      const now=new Date();
+      const diffMs=now-d;
+      const diffWeeks=Math.round(diffMs/(1000*60*60*24*7));
+      let label;
+      if(diffWeeks<=1) label='Semana passada';
+      else if(diffWeeks<=2) label='Retrasada';
+      else label=d.toLocaleDateString('pt-BR')+' — '+new Date(d.getFullYear(),d.getMonth(),d.getDate()+6).toLocaleDateString('pt-BR');
+      weeks.push({key:k,label:label});
+    }
+    let html='';
+    for(const w of weeks){
+      html+=`<option value="${w.key}">${w.label}</option>`;
+    }
+    sel.innerHTML=html;
+  },
+
+  _loadWeekEvents(weekKey){
+    try{
+      const s=JSON.parse(localStorage.getItem(weekKey)||'null');
+      if(s&&Array.isArray(s.events)){
+        return {events:s.events.map(e=>({...e,ts:new Date(e.ts)})),snapshots:s.snapshots||{},lastPollTs:s.lastPollTs||{}};
+      }
+    }catch(e){}
+    return {events:[],snapshots:{},lastPollTs:{}};
+  },
+
   clearLog(){
     this.events=[];
     this.snapshots={};   // zera snapshots para o próximo poll não recomparar com estado antigo
@@ -1441,6 +1488,9 @@ const fiscalizador={
     if(this.running)return;
     this.running=true;
     const feed=document.getElementById('fisc-feed');
+    // Volta dropdown para "Esta semana" e mostra feed em tempo real
+    const sel=document.getElementById('fisc-semana-sel');
+    if(sel)sel.value=this._weekKey();
     // Limpa chaves de semanas anteriores ao iniciar
     this._cleanOldWeekKeys();
     const stored=this._loadLog();
@@ -1650,7 +1700,87 @@ function toggleFiscalizador(){
   if(fiscalizador.running){fiscalizador.stop();return;}
   if(!selectedAccounts.length){alert('Nenhuma conta selecionada.');return;}
   if(!accessToken){alert('Conecte o Meta Ads primeiro.');return;}
+  fiscalizador._populateWeekDropdown();
   fiscalizador.start();
+}
+
+// Carrega eventos de uma semana específica (via dropdown)
+function carregarSemana(weekKey){
+  const feed=document.getElementById('fisc-feed');
+  const empty=document.getElementById('fisc-empty');
+  if(!feed)return;
+  const currentWeek=fiscalizador._weekKey();
+  if(weekKey===currentWeek){
+    // Voltou pra semana atual: restaura feed em tempo real
+    renderFiscFeed();
+    updateFiscBadge();
+    // Reexibe badge do fiscalizador
+    const badge=document.getElementById('fisc-badge');
+    if(badge&&fiscalizador.events.length>0){badge.style.display='inline-flex';badge.textContent=fiscalizador.events.length>99?'99+':fiscalizador.events.length;}
+    document.getElementById('fisc-inatividade').style.display='none';
+    return;
+  }
+  // Semana passada: carrega do localStorage
+  const stored=fiscalizador._loadWeekEvents(weekKey);
+  if(!stored.events.length){
+    feed.innerHTML='<div class="fisc-empty">Nenhuma alteração registrada nessa semana.</div>';
+    document.getElementById('fisc-inatividade').style.display='none';
+    updateFiscBadge();
+    return;
+  }
+  // Esconde badge do fiscalizador (é histórico, não alerta novo)
+  const badge=document.getElementById('fisc-badge');
+  if(badge){badge.style.display='none';}
+  document.getElementById('fisc-inatividade').style.display='none';
+  // Renderiza usando a mesma lógica de renderFiscFeed mas com eventos estáticos
+  const ENTITY_ORDER=['Campanha','Conjunto','Anúncio','Objeto'];
+  const ENTITY_LABEL={Campanha:'Campanhas',Conjunto:'Conjuntos','Anúncio':'Anúncios',Objeto:'Outros'};
+  const groups=new Map();
+  for(const evt of stored.events){
+    const n=evt.acct?.name||'Conta desconhecida';
+    if(!groups.has(n)) groups.set(n,{acct:evt.acct||{name:n,act_id:''},entities:new Map()});
+    const g=groups.get(n);
+    const ent=evt.entity||'Objeto';
+    if(!g.entities.has(ent)) g.entities.set(ent,[]);
+    g.entities.get(ent).push(evt);
+  }
+  const pad=n=>String(n).padStart(2,'0');
+  const fmtT=t=>`${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+  let html='';
+  for(const [,{acct,entities}] of groups){
+    const total=[...entities.values()].reduce((s,a)=>s+a.length,0);
+    const sorted=[...entities.entries()].sort((a,b)=>{
+      const ia=ENTITY_ORDER.indexOf(a[0]),ib=ENTITY_ORDER.indexOf(b[0]);
+      return (ia<0?99:ia)-(ib<0?99:ib);
+    });
+    html+=`<div class="fisc-group">`;
+    html+=`<div class="fisc-group-hdr" onclick="toggleFiscSection(this)"><span class="fisc-group-name"><span class="fisc-arrow">▼</span>${escHtml(acct.name)}</span><span class="fisc-group-badge">${total} evento${total!==1?'s':''}</span></div>`;
+    html+=`<div class="fisc-group-body">`;
+    for(const [entity,evts] of sorted){
+      const label=ENTITY_LABEL[entity]||entity;
+      html+=`<div class="fisc-entity-block">`;
+      html+=`<div class="fisc-entity-hdr" onclick="toggleFiscSection(this)"><span class="fisc-arrow">▼</span>${escHtml(label)}<span class="fisc-entity-badge">${evts.length}</span></div>`;
+      html+=`<div class="fisc-entity-body">`;
+      for(const evt of evts){
+        html+=`<div class="fisc-event ${evt.level||'info'}">`;
+        html+=`<div class="fisc-event-hdr"><span class="fisc-time">${fmtT(evt.ts)}</span></div>`;
+        html+=`<div class="fisc-body">${evt.icon||''} ${escHtml(evt.name)}</div>`;
+        html+=`<div class="fisc-detail">${escHtml(evt.what)}</div>`;
+        html+=`</div>`;
+      }
+      html+=`</div>`;
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+    html+=`</div>`;
+  }
+  feed.innerHTML=html;
+}
+  document.querySelectorAll('.dash-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.dash-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('dtab-'+tab).classList.add('active');
+  document.getElementById('dpanel-'+tab).classList.add('active');
+  if(tab==='fisc'&&!fiscalizador.running) fiscalizador._restoreFeed();
 }
 
 function switchDashTab(tab){
@@ -1658,7 +1788,10 @@ function switchDashTab(tab){
   document.querySelectorAll('.dash-panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('dtab-'+tab).classList.add('active');
   document.getElementById('dpanel-'+tab).classList.add('active');
-  if(tab==='fisc'&&!fiscalizador.running) fiscalizador._restoreFeed();
+  if(tab==='fisc'){
+    fiscalizador._populateWeekDropdown();
+    if(!fiscalizador.running) fiscalizador._restoreFeed();
+  }
 }
 
 function updateFiscUI(){

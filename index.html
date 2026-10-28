@@ -201,6 +201,13 @@
   .bbar-track { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
   .bbar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
   .bbar-fill.critico{background:var(--critico);} .bbar-fill.atencao{background:var(--atencao);} .bbar-fill.ok{background:var(--ok);}
+  .saldo-box { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border-radius: 7px; margin-bottom: 14px; background: var(--bg); border: 0.5px solid var(--border); }
+  .saldo-box.critico { background: var(--critico-bg); border-color: var(--critico-border); }
+  .saldo-box.atencao { background: var(--atencao-bg); border-color: var(--atencao-border); }
+  .saldo-lbl { font-size: 10px; font-weight: 500; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; }
+  .saldo-val { font-size: 15px; font-weight: 600; font-family: var(--mono); letter-spacing: -.3px; color: var(--text); }
+  .saldo-box.critico .saldo-val { color: var(--critico); } .saldo-box.atencao .saldo-val { color: var(--atencao); }
+  .saldo-sub { font-size: 10px; color: var(--text-faint); font-family: var(--mono); margin-top: 2px; }
   .alerts { display: flex; flex-direction: column; gap: 5px; }
   .alert-item { display: flex; align-items: flex-start; gap: 7px; padding: 7px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; line-height: 1.4; }
   .alert-item.critico{background:var(--critico-bg);color:var(--critico);} .alert-item.atencao{background:var(--atencao-bg);color:var(--atencao);} .alert-item.ok{background:var(--ok-bg);color:var(--ok);}
@@ -576,6 +583,9 @@ const SUPABASE_ANON = 'sb_publishable_cY2wUglvy9rxjnu4r5a6EQ_GHXMcmT7';
 // Proxy do InsightFlow (Railway) — a chave Gemini fica segura no servidor, não exposta aqui
 // Preencha com a URL do InsightFlow no Railway (ex: https://insightflow-xxx.up.railway.app)
 const INSIGHTFLOW_URL = 'https://insight-flow-production-1751.up.railway.app';
+// Alerta de saldo baixo (pré-paga): dispara abaixo deste valor, ou abaixo de N dias de gasto médio
+const SALDO_BAIXO_MIN = 300;
+const SALDO_BAIXO_DIAS = 3;
 
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -1103,20 +1113,57 @@ async function getInsights(actId,since,until,fields) {
 async function getCampaigns(actId) {
   try { const d=await fbGet(`/${actId}/campaigns?fields=id,name,status,effective_status&limit=100&access_token=${accessToken}`); return d.data||[]; } catch(e){return[];}
 }
+// Saldo/modalidade: `balance` NÃO é saldo (vem em centavos e com outro significado).
+// O saldo real só existe no display_string do funding_source. Ver learnings_radar_saldo_contas.md.
+async function getFunding(actId) {
+  try {
+    return await fbGet(`/${actId}?fields=is_prepay_account,funding_source_details,balance,spend_cap&access_token=${accessToken}`);
+  } catch(e){ return null; }
+}
+function parseSaldo(displayString){
+  if(!displayString) return null;
+  const m=displayString.match(/R\$\s*([\d.]+),(\d{2})/);
+  if(!m) return null;
+  return parseFloat(m[1].replace(/\./g,'')+'.'+m[2]);
+}
+function interpretarFunding(f) {
+  if(!f) return null;
+  const fsd=f.funding_source_details||{};
+  const prepago = f.is_prepay_account===true || (f.is_prepay_account===undefined && fsd.type===20);
+  const saldo = prepago ? parseSaldo(fsd.display_string) : null;
+  // Sem funding configurado: não é cartão com dívida zero, é conta sem forma de pagamento.
+  const semFunding = !fsd.type && f.is_prepay_account!==true;
+  return {
+    prepago,
+    semFunding,
+    saldo,
+    cartao: (fsd.display_string||'').trim(),          // ex: "Mastercard *1907"
+    acumulado: (prepago||semFunding) ? null : parseFloat(f.balance||0)/100, // gasto do ciclo, em centavos
+    limite: parseFloat(f.spend_cap||0)/100,
+  };
+}
 
 const FIELDS='spend,impressions,reach,clicks,ctr,actions,action_values,cost_per_action_type';
 
 async function buscarDadosConta(conta) {
   const {curStart,curEnd,prevStart,prevEnd}=config;
   const today=fmtD(new Date()), yest=fmtD(new Date(Date.now()-86400000));
-  const [cur,prev,campaigns,todayI,yestI]=await Promise.allSettled([
+  // Ritmo de gasto: janelas fixas relativas a ontem, independentes do período escolhido.
+  // Servem para estimar quantos dias de saldo restam mesmo quando houve semana sem veiculação.
+  const d7=fmtD(new Date(Date.now()-7*86400000));
+  const d30=fmtD(new Date(Date.now()-30*86400000));
+  const [cur,prev,campaigns,todayI,yestI,funding,w7,w30]=await Promise.allSettled([
     getInsights(conta.act_id,curStart,curEnd,FIELDS),
     getInsights(conta.act_id,prevStart,prevEnd,FIELDS),
     getCampaigns(conta.act_id),
     getInsights(conta.act_id,today,today,'spend'),
     getInsights(conta.act_id,yest,yest,'spend'),
+    getFunding(conta.act_id),
+    getInsights(conta.act_id,d7,yest,'spend'),
+    getInsights(conta.act_id,d30,yest,'spend'),
   ]);
-  return { conta, cur:cur.value||{}, prev:prev.value||{}, campaigns:campaigns.value||[], todaySpend:parseFloat(todayI.value?.spend||0), yestSpend:parseFloat(yestI.value?.spend||0) };
+  return { conta, cur:cur.value||{}, prev:prev.value||{}, campaigns:campaigns.value||[], todaySpend:parseFloat(todayI.value?.spend||0), yestSpend:parseFloat(yestI.value?.spend||0), funding:interpretarFunding(funding.value),
+    spend7:parseFloat(w7.value?.spend||0), spend30:parseFloat(w30.value?.spend||0) };
 }
 
 async function buscarEmLotes(contas,lote=3) {
@@ -1143,8 +1190,17 @@ function detectType(cur){
 }
 function calcVar(c,p){if(!p||p===0)return null;return((c-p)/p)*100;}
 
+// Ritmo de gasto do cliente: prioriza a média de 7 dias; se não houve gasto nessa semana
+// (ex.: ficou sem saldo), usa a média de 30 dias para não subestimar o consumo diário.
+function calcularRitmo(spend7,spend30){
+  const s7=parseFloat(spend7||0), s30=parseFloat(spend30||0);
+  if(s7>0)  return {janela:7,  avgDiario:s7/7};
+  if(s30>0) return {janela:30, avgDiario:s30/30};
+  return null;
+}
+
 function analyzeAccount(data,budgets){
-  const{conta,cur,prev,campaigns,todaySpend,yestSpend}=data;
+  const{conta,cur,prev,campaigns,todaySpend,yestSpend,funding,spend7,spend30}=data;
   const selectedMetrics = getAccountMetrics(conta.id);
   const budget=budgets[conta.id]||null;
   const cS=parseFloat(cur.spend||0),pS=parseFloat(prev.spend||0);
@@ -1174,8 +1230,32 @@ function analyzeAccount(data,budgets){
   if(bP!==null){if(bP>120){alerts.push({level:'critico',msg:`Gasto acima de 120% do orçamento (${bP.toFixed(1)}%)`});priority='critico';score=3;}else if(bP<60){alerts.push({level:'atencao',msg:`Gasto abaixo de 60% do orçamento (${bP.toFixed(1)}%)`});if(score<2){priority='atencao';score=2;}}}
   if(yestSpend===0&&todaySpend>0){alerts.push({level:'atencao',msg:'Sem gasto ontem, mas com gasto hoje'});if(score<2){priority='atencao';score=2;}}
   if(active.length===0&&campaigns.length>0){alerts.push({level:'atencao',msg:'Nenhuma campanha ativa nesta conta'});if(score<2){priority='atencao';score=2;}}
+  // Saldo (pré-paga): alerta antes de zerar, comparando com o ritmo REAL de gasto do cliente.
+  // Usa a média diária da janela de 7 dias; se ela estiver zerada (semana inteira sem veicular,
+  // ex. por falta de saldo), cai para a média de 30 dias. Só então o "saldo acabar" fica previsível.
+  const ritmo = calcularRitmo(spend7, spend30);
+  const dailyAvg = ritmo ? ritmo.avgDiario : null;
+  const diasSaldo = (funding && funding.prepago && funding.saldo!==null && dailyAvg>0) ? funding.saldo/dailyAvg : null;
+  if(funding && funding.prepago && funding.saldo!==null){
+    if(funding.saldo<=0){
+      alerts.push({level:'critico',msg:'Saldo zerado — anúncios param de veicular'});
+      priority='critico';score=3;maxDrop=100;
+    } else if(diasSaldo!==null && diasSaldo<SALDO_BAIXO_DIAS){
+      const base=ritmo.janela===7?'média dos últimos 7 dias':'média dos últimos 30 dias';
+      alerts.push({level:'atencao',msg:`Saldo acaba em ~${diasSaldo.toFixed(1)} dia(s) — ${fmtBRL(funding.saldo)} restantes, ritmo de ${fmtBRL(dailyAvg)}/dia (${base})`});
+      if(score<2){priority='atencao';score=2;maxDrop=Math.max(maxDrop,50);}
+    } else if(diasSaldo===null && funding.saldo<SALDO_BAIXO_MIN){
+      // Sem histórico de gasto para projetar dias: usa piso absoluto como única referência.
+      alerts.push({level:'atencao',msg:`Saldo baixo: ${fmtBRL(funding.saldo)} (sem histórico de gasto recente para projetar)`});
+      if(score<2){priority='atencao';score=2;maxDrop=Math.max(maxDrop,50);}
+    }
+  }
+  if(funding && funding.semFunding && active.length>0){
+    alerts.push({level:'atencao',msg:'Sem forma de pagamento configurada'});
+    if(score<2){priority='atencao';score=2;}
+  }
   if(!alerts.length)alerts.push({level:'ok',msg:'Conta sem alertas no período analisado'});
-  return{conta,cur,prev,campaigns,todaySpend,yestSpend,type,priority,score,maxDrop,mC,mP,mL,mV,cS,pS,sV,cCl,pCl,cIm,cCTR,pCTR,cC,cP,budget,bP,alerts};
+  return{conta,cur,prev,campaigns,todaySpend,yestSpend,funding,diasSaldo,ritmo,dailyAvg,spend7,spend30,type,priority,score,maxDrop,mC,mP,mL,mV,cS,pS,sV,cCl,pCl,cIm,cCTR,pCTR,cC,cP,budget,bP,alerts};
 }
 
 // ─── FORMAT ───────────────────────────────────────────────────────────────────
@@ -1240,6 +1320,23 @@ function renderCard(a,idx){
       </div>
       <div class="bbar-track"><div class="bbar-fill ${a.bP>120?'critico':a.bP<60?'atencao':'ok'}" style="width:${Math.min(a.bP,100)}%"></div></div>
     </div>`:'';
+  let saldoBox='';
+  if(a.funding){
+    if(a.funding.prepago&&a.funding.saldo!==null){
+      const cls=a.funding.saldo<=0?'critico':((a.diasSaldo!==null?a.diasSaldo<SALDO_BAIXO_DIAS:a.funding.saldo<SALDO_BAIXO_MIN))?'atencao':'';
+      let sub;
+      if(a.dailyAvg>0){
+        const base=a.ritmo.janela===7?'7 dias':'30 dias';
+        sub=`~${a.diasSaldo.toFixed(1)} dias restantes · ${fmtBRL(a.dailyAvg)}/dia (média ${base})`;
+      } else { sub='Sem histórico de gasto recente'; }
+      saldoBox=`<div class="saldo-box ${cls}"><div><div class="saldo-lbl">Saldo atual</div><div class="saldo-val">${fmtBRL(a.funding.saldo)}</div><div class="saldo-sub">${sub}</div></div></div>`;
+    } else if(a.funding.semFunding){
+      saldoBox=`<div class="saldo-box atencao"><div><div class="saldo-lbl">Forma de pagamento</div><div class="saldo-val">Não configurada</div><div class="saldo-sub">Adicione um cartão ou saldo no gerenciador</div></div></div>`;
+    } else {
+      const sub=[a.funding.cartao||'Cartão', a.funding.limite>0?`Limite ${fmtBRL(a.funding.limite)}`:'sem limite'].join(' · ');
+      saldoBox=`<div class="saldo-box"><div><div class="saldo-lbl">Acumulado no ciclo (cobrança no cartão)</div><div class="saldo-val">${fmtBRL(a.funding.acumulado)}</div><div class="saldo-sub">${escHtml(sub)}</div></div></div>`;
+    }
+  }
   return`
     <div class="acct-card ${a.priority}" style="animation-delay:${idx*.04}s">
       <div class="card-hdr">
@@ -1256,6 +1353,7 @@ function renderCard(a,idx){
         </div>
       </div>
       <div class="card-body">
+        ${saldoBox}
         <div class="metrics-row">${metrics.join('')}</div>
         ${bBar}
         <div class="alerts">${a.alerts.map(al=>`<div class="alert-item ${al.level}"><div class="alert-dot"></div>${escHtml(al.msg)}</div>`).join('')}</div>
